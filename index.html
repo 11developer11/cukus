@@ -639,9 +639,10 @@ const ENEMY_BASE = {
   boss:    {hp:900, dmg:22, spd:62, radius:42, color:"#8a0e0e", xp:60, gold:80, melee:true, ranged:true, range:300, shotCd:1.1},
 };
 
+const SPAWN_PATH_ANGLES = [0, Math.PI]; // enemies march in from two roads, matching the wall-ring gaps
 function spawnEnemy(kind, scale, am){
   const base = ENEMY_BASE[kind];
-  const ang = rand(0, Math.PI*2);
+  const ang = kind==="boss" ? rand(0,Math.PI*2) : pick(SPAWN_PATH_ANGLES) + rand(-0.4,0.4);
   const r = 620;
   const x = clamp(player.x + Math.cos(ang)*r, 40, WORLD.w-40);
   const y = clamp(player.y + Math.sin(ang)*r, 40, WORLD.h-40);
@@ -1606,8 +1607,38 @@ function drawBackground(){
     else drawRock(sx,sy,d.scale);
   }
 
+  drawBaseFenceDiamond();
+
   const kx = worldToScreenX(keepPos.x), ky = worldToScreenY(keepPos.y);
-  if(kx>-140 && ky>-160 && kx<W+140 && ky<H+140) drawKeep(kx,ky,save.keepLevel||0);
+  if(kx>-140 && ky>-160 && kx<W+140 && ky<H+140){
+    drawGoldPile(kx-64, ky-18);
+    drawKeep(kx,ky,save.keepLevel||0);
+  }
+}
+
+function drawBaseFenceDiamond(){
+  const cx = worldToScreenX(baseCenter.x), cy = worldToScreenY(baseCenter.y);
+  const r = 232;
+  if(cx<-r-40||cy<-r-40||cx>W+r+40||cy>H+r+40) return;
+  ctx.save();
+  ctx.strokeStyle="#6b4423"; ctx.lineWidth=9; ctx.lineJoin="round";
+  ctx.beginPath();
+  ctx.moveTo(cx,cy-r); ctx.lineTo(cx+r,cy); ctx.lineTo(cx,cy+r); ctx.lineTo(cx-r,cy);
+  ctx.closePath(); ctx.stroke();
+  ctx.strokeStyle="#8a6432"; ctx.lineWidth=3;
+  ctx.stroke();
+  ctx.restore();
+}
+function drawGoldPile(x,y){
+  ctx.save(); ctx.translate(x,y);
+  ctx.fillStyle="#00000030";
+  ctx.beginPath(); ctx.ellipse(0,20,30,10,0,0,7); ctx.fill();
+  ctx.fillStyle="#e8b923"; ctx.strokeStyle="#a87c10"; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.ellipse(0,10,26,14,0,0,7); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(-6,-4,20,12,0,0,7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle="#ffd54a";
+  ctx.beginPath(); ctx.ellipse(4,-14,13,9,0,0,7); ctx.fill(); ctx.stroke();
+  ctx.restore();
 }
 
 function drawTree(x,y,scale){
