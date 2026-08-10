@@ -80,7 +80,7 @@
   #tierBanner .big{font-size:clamp(28px,6vw,52px); font-weight:900; text-shadow:0 0 20px currentColor,0 4px 0 #000; letter-spacing:2px;}
   #tierBanner .small{font-size:16px; color:#fff; text-shadow:0 2px 4px #000; margin-top:4px;}
 
-  #eventBanner{position:fixed; top:16%; left:50%; transform:translate(-50%,-50%) scale(.6); opacity:0; pointer-events:none; text-align:center; z-index:21; transition:opacity .3s, transform .3s;}
+  #eventBanner{position:fixed; top:5%; left:50%; transform:translate(-50%,-50%) scale(.6); opacity:0; pointer-events:none; text-align:center; z-index:31; transition:opacity .3s, transform .3s;}
   #eventBanner.show{opacity:1; transform:translate(-50%,-50%) scale(1);}
   #eventBanner .big{font-size:clamp(22px,5vw,38px); font-weight:900; text-shadow:0 0 18px currentColor,0 3px 0 #000; letter-spacing:1px;}
   #eventBanner .small{font-size:14px; color:#fff; text-shadow:0 2px 4px #000; margin-top:2px;}
@@ -102,6 +102,13 @@
   .shopItem h4{margin:0 0 4px; color:var(--gold); font-size:15px;}
   .shopItem .lvl{color:#ffe9b0aa; font-size:12px; margin-bottom:8px;}
   .shopItem button{width:100%;}
+
+  .achItem{background:#2a1c0c; border:2px solid #7a4a00; border-radius:12px; padding:12px; text-align:left; display:flex; gap:10px; align-items:center;}
+  .achItem.locked{opacity:.45; filter:grayscale(.6);}
+  .achItem .achIcon{font-size:26px; width:32px; text-align:center;}
+  .achItem h4{margin:0; color:var(--gold); font-size:14px;}
+  .achItem p{margin:2px 0 0; color:#ffe9b0aa; font-size:12px;}
+  .goNearMiss{color:#ffd54a; font-size:14px; font-weight:800; margin-top:-6px;}
 
   .keepGrid{max-width:420px; margin:0 auto;}
   .keepCard{background:linear-gradient(#241a2c,#160f1c); border:2px solid #6b3fa0; border-radius:14px; padding:16px; text-align:center;}
@@ -173,12 +180,14 @@
       <div class="stat">🪙 Treasury<br><b id="menuGold">0</b></div>
       <div class="stat">🏰 Keep<br><b id="menuKeep">0</b>/20</div>
       <div class="stat">✨ Ascensions<br><b id="menuAsc">0</b></div>
+      <div class="stat">🔥 Streak<br><b id="menuStreak">0</b> days</div>
     </div>
     <div class="row">
       <button class="btn big" id="playBtn">▶ Play Now</button>
     </div>
     <div class="row" style="margin-top:10px;">
       <button class="btn secondary" id="shopBtn">🛒 Kingdom Shop</button>
+      <button class="btn secondary" id="achBtn">🏆 Achievements</button>
       <button class="btn secondary" id="howBtn">❔ How to Play</button>
     </div>
   </div>
@@ -203,6 +212,16 @@
       🔁 After reaching God Level you can <b>Ascend</b> for a harder, more rewarding new journey.
     </p>
     <button class="btn" id="howBack">Got it</button>
+  </div>
+</div>
+
+<!-- ACHIEVEMENTS -->
+<div id="achievements" class="center hidden">
+  <div class="panel" style="max-width:640px;">
+    <h1 class="title" style="font-size:28px;">🏆 Achievements</h1>
+    <div class="stat" id="achProgress" style="margin-bottom:10px;">0 / 0 unlocked</div>
+    <div class="shopGrid" id="achGrid" style="max-width:600px;"></div>
+    <button class="btn secondary" id="achBack" style="margin-top:16px;">Back</button>
   </div>
 </div>
 
@@ -237,6 +256,7 @@
 <div id="gameover" class="center hidden">
   <div class="panel">
     <h1 class="title" style="color:#ff6b6b;">💀 YOU FELL</h1>
+    <div class="goNearMiss" id="goNearMiss"></div>
     <div class="goQuip" id="goQuip"></div>
     <div class="row" style="margin:14px 0;">
       <div class="stat">Wave Reached<br><b id="goWave">1</b></div>
@@ -282,6 +302,8 @@ function loadSave(){
     if(s && typeof s === "object") return Object.assign(defaultSave(), s, {
       meta: Object.assign(defaultSave().meta, s.meta||{}),
       garrison: Object.assign(defaultSave().garrison, s.garrison||{}),
+      stats: Object.assign(defaultSave().stats, s.stats||{}),
+      achievements: Object.assign({}, s.achievements||{}),
     });
   }catch(e){}
   return defaultSave();
@@ -294,7 +316,11 @@ function defaultSave(){
     keepLevel: 0,
     tutorialSeen: false,
     meta: { dmg:0, hp:0, spd:0, luck:0, regen:0 },
-    garrison: { dmg:0, fireRate:0 }
+    garrison: { dmg:0, fireRate:0 },
+    stats: { kills:0, chickensCaught:0, bestCombo:0, maxWallsInRun:0, lifetimeGold:0 },
+    achievements: {},
+    streak: 0,
+    lastPlayDate: null,
   };
 }
 let save = loadSave();
@@ -457,6 +483,79 @@ const DEATH_QUIPS = [
 
 const HIT_WORDS = ["POW!","BONK!","YEET!","SMACK!","WHAM!","ZAP!","BOOF!","SPLAT!"];
 
+/* ============================== ACHIEVEMENTS ============================== */
+const ACHIEVEMENTS = [
+  {id:"first_blood", icon:"🗡️", name:"First Blood", desc:"Kill your first enemy", check:s=>s.stats.kills>=1},
+  {id:"kill100",  icon:"⚔️", name:"Grunt Work", desc:"Kill 100 enemies (lifetime)", check:s=>s.stats.kills>=100},
+  {id:"kill1000", icon:"💀", name:"Mass Extinction", desc:"Kill 1,000 enemies (lifetime)", check:s=>s.stats.kills>=1000},
+  {id:"wave10", icon:"🌊", name:"Getting Started", desc:"Reach Wave 10", check:s=>s.bestWave>=10},
+  {id:"wave30", icon:"🌊", name:"Deep Waters", desc:"Reach Wave 30", check:s=>s.bestWave>=30},
+  {id:"wave70", icon:"👑", name:"GOD LEVEL", desc:"Reach Wave 70", check:s=>s.bestWave>=70},
+  {id:"keep20", icon:"🏰", name:"Fully Fortified", desc:"Max out your Keep (Lv 20)", check:s=>s.keepLevel>=20},
+  {id:"walls5", icon:"🧱", name:"Great Wall", desc:"Have 5 walls up at once in a run", check:s=>s.stats.maxWallsInRun>=5},
+  {id:"chicken1", icon:"🐔", name:"Chicken Catcher", desc:"Catch a Golden Chicken", check:s=>s.stats.chickensCaught>=1},
+  {id:"chicken10", icon:"🍗", name:"Chicken Farmer", desc:"Catch 10 Golden Chickens (lifetime)", check:s=>s.stats.chickensCaught>=10},
+  {id:"ascend1", icon:"✨", name:"Ascended", desc:"Ascend once", check:s=>s.ascension>=1},
+  {id:"combo20", icon:"🔥", name:"On Fire", desc:"Hit a 20-kill combo", check:s=>s.stats.bestCombo>=20},
+  {id:"gold1000", icon:"🪙", name:"Treasurer", desc:"Bank 1,000 gold (lifetime)", check:s=>s.stats.lifetimeGold>=1000},
+];
+let achToastDelay = 0;
+function checkAchievements(){
+  achToastDelay = 0;
+  let unlockedAny = false;
+  for(const a of ACHIEVEMENTS){
+    if(!save.achievements[a.id] && a.check(save)){
+      save.achievements[a.id] = true;
+      unlockedAny = true;
+      const delay = achToastDelay; achToastDelay += 1500;
+      setTimeout(()=>{ floatText(W/2, H*0.15, `🏆 ${a.name} unlocked!`, "#ffd54a", 18); sfx.levelup(); }, delay);
+    }
+  }
+  if(unlockedAny) persist();
+}
+function buildAchievementsUI(){
+  const grid = document.getElementById("achGrid");
+  grid.innerHTML = "";
+  let unlockedCount = 0;
+  ACHIEVEMENTS.forEach(a=>{
+    const unlocked = !!save.achievements[a.id];
+    if(unlocked) unlockedCount++;
+    const div = document.createElement("div");
+    div.className = "achItem" + (unlocked?"":" locked");
+    div.innerHTML = `<div class="achIcon">${unlocked?a.icon:"🔒"}</div><div><h4>${a.name}</h4><p>${a.desc}</p></div>`;
+    grid.appendChild(div);
+  });
+  document.getElementById("achProgress").textContent = `${unlockedCount} / ${ACHIEVEMENTS.length} unlocked`;
+}
+
+/* ============================== TREASURE CHESTS (variable reward drops) ============================== */
+const CHEST_TIERS = [
+  {weight:60, label:"Chest", color:"#c9860c", goldMin:15, goldMax:35},
+  {weight:30, label:"Shiny Chest", color:"#5ec8ff", goldMin:40, goldMax:80},
+  {weight:10, label:"JACKPOT CHEST", color:"#ff6bcf", goldMin:100, goldMax:200},
+];
+function rollChestTier(){
+  const total = CHEST_TIERS.reduce((s,t)=>s+t.weight,0);
+  let r = rand(0,total);
+  for(const t of CHEST_TIERS){ if(r<t.weight) return t; r-=t.weight; }
+  return CHEST_TIERS[0];
+}
+function applyRunStats(){
+  save.stats.kills += runKills;
+  save.stats.chickensCaught += runChickensCaught;
+  save.stats.bestCombo = Math.max(save.stats.bestCombo, runBestCombo);
+  save.stats.maxWallsInRun = Math.max(save.stats.maxWallsInRun, runMaxWalls);
+  save.stats.lifetimeGold += runGold;
+}
+function openChest(c){
+  const tier = c.tier || rollChestTier();
+  const gold = Math.round(rand(tier.goldMin,tier.goldMax) * (1+wave*0.05));
+  runGold += gold;
+  spawnParticles(c.x,c.y,tier.color,30,220,0.6,4);
+  addShake(6); sfx.coin();
+  floatText(worldToScreenX(player.x), worldToScreenY(player.y)-30, `${tier.label}! +${gold}🪙`, tier.color, 17);
+}
+
 function floatText(x,y,text,color,size){
   const el = document.createElement("div");
   el.className="floater"; el.textContent=text;
@@ -524,6 +623,7 @@ let firstBuildDone = false;
 let keepSpin = 0;
 let activeEvent = null, eventTimer = 0;
 let chicken = null, chickenTimer = 0;
+let runKills = 0, runChickensCaught = 0, runBestCombo = 0, runMaxWalls = 0;
 
 function ascensionMult(){ return 1 + save.ascension*0.35; }
 
@@ -582,6 +682,7 @@ function startRun(){
   buildAnims.length = 0;
   activeEvent = null; eventTimer = rand(22,35);
   chicken = null; chickenTimer = rand(18,30);
+  runKills = 0; runChickensCaught = 0; runBestCombo = 0; runMaxWalls = 0;
   document.getElementById("eventBanner").classList.remove("show");
   buildWorld();
   resetPlots();
@@ -818,7 +919,11 @@ function onPlotTap(p){
 function finalizeBuildAnim(anim){
   const p = anim.plot;
   p.animating = false;
-  if(p.type==="wall"){ p.built = true; }
+  if(p.type==="wall"){
+    p.built = true;
+    const wallCount = plots.filter(q=>q.type==="wall" && q.built).length;
+    runMaxWalls = Math.max(runMaxWalls, wallCount);
+  }
   else if(!anim.wasBuilt){ p.built = true; p.level = 1; p.atkCooldown = 0; }
   else { p.level++; }
   spawnParticles(p.x,p.y, anim.color, p.type==="wall"?16:12, 140, 0.45, 3);
@@ -978,6 +1083,7 @@ function damageEnemy(e, dmg, isCrit){
 
 function killEnemy(e){
   e.dead = true;
+  runKills++;
   spawnParticles(e.x,e.y,e.color,e.isBoss?60:16, e.isBoss?260:150, e.isBoss?0.9:0.5, e.isBoss?5:3);
   if(e.isBoss){ addShake(18); screenFlash("#ff3333",400); sfx.death(); showBossBar(false); activeBoss=null; }
   if(e.kind==="bomber"){
@@ -988,6 +1094,7 @@ function killEnemy(e){
   }
   if(!e.isBoss){
     combo++; comboTimer = 1.4;
+    runBestCombo = Math.max(runBestCombo, combo);
     if(COMBO_MILESTONES.includes(combo)){
       sfx.levelup();
       floatText(W/2, H*0.24, `🔥 ${combo} KILL COMBO!`, "#ff9d3d", 18+Math.min(14,combo/4));
@@ -996,6 +1103,11 @@ function killEnemy(e){
   }
   coins.push({x:e.x,y:e.y,val:e.goldVal, vx:rand(-40,40), vy:rand(-40,40)});
   xporbs.push({x:e.x+rand(-8,8), y:e.y+rand(-8,8), val:e.xpVal, vx:rand(-40,40), vy:rand(-40,40)});
+  if(e.isBoss){
+    coins.push({x:e.x,y:e.y,val:0, vx:0,vy:0, isChest:true, tier:CHEST_TIERS[2]});
+  } else if(Math.random()<0.03){
+    coins.push({x:e.x,y:e.y,val:0, vx:rand(-30,30),vy:rand(-30,30), isChest:true, tier:rollChestTier()});
+  }
 }
 
 function damagePlayer(dmg){
@@ -1016,13 +1128,22 @@ function damagePlayer(dmg){
 function onDeath(){
   state = "gameover";
   sfx.death();
+  const prevBest = save.bestWave;
+  const isNewBest = wave > prevBest;
   save.bestWave = Math.max(save.bestWave, wave);
   save.bankedGold += runGold;
+  applyRunStats();
+  checkAchievements();
   persist();
   document.getElementById("goWave").textContent = wave;
   document.getElementById("goTier").textContent = tierForWave(wave).icon+" "+tierForWave(wave).name;
   document.getElementById("goGold").textContent = runGold;
   document.getElementById("goQuip").textContent = pick(DEATH_QUIPS);
+  const nearMissEl = document.getElementById("goNearMiss");
+  const gap = prevBest - wave;
+  if(isNewBest && wave>1) nearMissEl.textContent = "🎉 NEW BEST WAVE!";
+  else if(gap>0 && gap<=3) nearMissEl.textContent = `So close! Only ${gap} wave${gap===1?"":"s"} from your best.`;
+  else nearMissEl.textContent = "";
   document.getElementById("hud").classList.add("hidden");
   document.getElementById("plotSigns").classList.add("hidden");
   document.getElementById("levelup").classList.add("hidden");
@@ -1036,6 +1157,8 @@ function onVictory(){
   sfx.victory();
   save.bestWave = Math.max(save.bestWave, wave);
   save.bankedGold += runGold;
+  applyRunStats();
+  checkAchievements();
   persist();
   document.getElementById("vWave").textContent = wave;
   document.getElementById("vGold").textContent = runGold;
@@ -1113,6 +1236,7 @@ function fleeChicken(dt){
     xporbs.push({x:chicken.x,y:chicken.y,val:xpVal, vx:rand(-40,40), vy:rand(-40,40)});
     spawnParticles(chicken.x,chicken.y,"#ffe14d",22,180,0.5,3);
     addShake(5); sfx.coin();
+    runChickensCaught++;
     floatText(W/2, H*0.3, "🐔 Caught! Jackpot!", "#ffd54a", 18);
     chicken = null;
   }
@@ -1176,7 +1300,7 @@ function updateHud(){
 
 /* ============================== SCREENS ============================== */
 function hideAllScreens(){
-  ["menu","how","shop","levelup","gameover","victory"].forEach(id=>document.getElementById(id).classList.add("hidden"));
+  ["menu","how","shop","levelup","gameover","victory","achievements"].forEach(id=>document.getElementById(id).classList.add("hidden"));
 }
 function goMenu(){
   state="menu";
@@ -1189,6 +1313,31 @@ function goMenu(){
   document.getElementById("menuGold").textContent = save.bankedGold;
   document.getElementById("menuKeep").textContent = save.keepLevel||0;
   document.getElementById("menuAsc").textContent = save.ascension;
+  document.getElementById("menuStreak").textContent = save.streak||0;
+}
+
+/* ============================== DAILY STREAK ============================== */
+function checkDailyStreak(){
+  const today = new Date().toISOString().slice(0,10);
+  if(save.lastPlayDate === today) return;
+  let newStreak = 1;
+  if(save.lastPlayDate){
+    const diffDays = Math.round((new Date(today+"T00:00:00Z") - new Date(save.lastPlayDate+"T00:00:00Z"))/86400000);
+    newStreak = diffDays===1 ? (save.streak||0)+1 : 1;
+  }
+  save.streak = newStreak;
+  save.lastPlayDate = today;
+  const bonus = Math.min(300, 20*newStreak);
+  save.bankedGold += bonus;
+  persist();
+  document.getElementById("menuStreak").textContent = newStreak;
+  document.getElementById("menuGold").textContent = save.bankedGold;
+  const el = document.getElementById("eventBanner");
+  el.querySelector(".big").textContent = `🔥 DAY ${newStreak} STREAK!`;
+  el.querySelector(".big").style.color = "#ff9d3d";
+  el.querySelector(".small").textContent = `+${bonus}🪙 welcome-back bonus`;
+  el.classList.add("show");
+  setTimeout(()=>el.classList.remove("show"), 2400);
 }
 
 function buildShop(){
@@ -1281,6 +1430,8 @@ document.getElementById("shopBtn").onclick = ()=>{ hideAllScreens(); buildShop()
 document.getElementById("shopBack").onclick = goMenu;
 document.getElementById("howBtn").onclick = ()=>{ hideAllScreens(); document.getElementById("how").classList.remove("hidden"); };
 document.getElementById("howBack").onclick = goMenu;
+document.getElementById("achBtn").onclick = ()=>{ hideAllScreens(); buildAchievementsUI(); document.getElementById("achievements").classList.remove("hidden"); };
+document.getElementById("achBack").onclick = goMenu;
 document.getElementById("retryBtn").onclick = ()=>{ document.getElementById("gameover").classList.add("hidden"); startRun(); };
 document.getElementById("menuBtn").onclick = ()=>{ document.getElementById("gameover").classList.add("hidden"); goMenu(); };
 document.getElementById("vMenuBtn").onclick = ()=>{ document.getElementById("victory").classList.add("hidden"); goMenu(); };
@@ -1387,6 +1538,26 @@ function update(dt){
       if(e.fuseTimer<=0){ killEnemy(e); continue; }
     }
 
+    // boss slam: telegraphs a red danger zone, then hits hard if the player is still standing in it
+    if(e.isBoss){
+      if(e.slamTelegraph){
+        const st = e.slamTelegraph;
+        if(elapsed - st.startTime >= st.duration){
+          if(dist2(player.x,player.y,st.x,st.y) < st.radius*st.radius) damagePlayer(Math.round(e.dmg*1.8));
+          spawnParticles(st.x,st.y,"#ff3333",30,220,0.5,4);
+          addShake(8); screenFlash("#ff3333",200);
+          e.slamTelegraph = null;
+          e.slamTimer = rand(4,6);
+        }
+      } else {
+        e.slamTimer = (e.slamTimer==null ? 3.5 : e.slamTimer) - dt;
+        if(e.slamTimer<=0){
+          e.slamTelegraph = { x: player.x, y: player.y, startTime: elapsed, duration: 1.0, radius: 90 };
+          sfx.hurt();
+        }
+      }
+    }
+
     // walls physically block enemies — they're indestructible, so this is pure collision, no damage
     for(const w of plots){
       if(w.type!=="wall" || !w.built) continue;
@@ -1489,9 +1660,14 @@ function update(dt){
       c.x += (player.x-c.x)/d*260*dt; c.y += (player.y-c.y)/d*260*dt;
     } else { c.x+=c.vx*dt*0.3; c.y+=c.vy*dt*0.3; c.vx*=0.9; c.vy*=0.9; }
     if(d2 < (player.radius+10)*(player.radius+10)){
-      const gain = Math.round(c.val*player.goldMult*(goldrushActive?2:1));
-      c.dead=true; runGold += gain; sfx.coin();
-      floatText(worldToScreenX(player.x)+rand(-10,10), worldToScreenY(player.y)-20, "+"+gain+"🪙","#ffd54a",13);
+      c.dead = true;
+      if(c.isChest){
+        openChest(c);
+      } else {
+        const gain = Math.round(c.val*player.goldMult*(goldrushActive?2:1));
+        runGold += gain; sfx.coin();
+        floatText(worldToScreenX(player.x)+rand(-10,10), worldToScreenY(player.y)-20, "+"+gain+"🪙","#ffd54a",13);
+      }
     }
   }
   coins = coins.filter(c=>!c.dead);
@@ -1844,11 +2020,37 @@ function drawWorldEntities(){
   for(const p of enemyProjectiles) drawProjectile(p, "#ff6b6b");
   for(const pt of particles) drawParticle(pt);
   for(const a of buildAnims) drawBuildAnim(a);
+  for(const e of enemies){
+    if(e.slamTelegraph) drawSlamTelegraph(e.slamTelegraph);
+  }
+}
+
+function drawSlamTelegraph(st){
+  const p = clamp((elapsed-st.startTime)/st.duration, 0, 1);
+  const x=worldToScreenX(st.x), y=worldToScreenY(st.y);
+  ctx.save();
+  ctx.globalAlpha = 0.18*p;
+  ctx.fillStyle="#ff3333";
+  ctx.beginPath(); ctx.arc(x,y,st.radius,0,7); ctx.fill();
+  ctx.globalAlpha = 0.55+0.4*p;
+  ctx.strokeStyle="#ff3333"; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.arc(x,y,st.radius*Math.min(1,p+0.12),0,7); ctx.stroke();
+  ctx.restore();
 }
 
 function drawCoin(c){
   const x=worldToScreenX(c.x), y=worldToScreenY(c.y);
   ctx.save(); ctx.translate(x,y);
+  if(c.isChest){
+    const col = (c.tier&&c.tier.color)||"#c9860c";
+    ctx.fillStyle="#00000040"; ctx.beginPath(); ctx.ellipse(0,7,11,4,0,0,7); ctx.fill();
+    ctx.fillStyle="#6b4423"; ctx.strokeStyle="#3a2a12"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.rect(-9,-4,18,10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=col; ctx.beginPath(); ctx.rect(-9,-9,18,5); ctx.fill(); ctx.stroke();
+    ctx.fillStyle="#ffd54a"; ctx.beginPath(); ctx.arc(0,-3,2.2,0,7); ctx.fill();
+    ctx.restore();
+    return;
+  }
   ctx.fillStyle="#ffd54a"; ctx.strokeStyle="#c9860c"; ctx.lineWidth=2;
   ctx.beginPath(); ctx.arc(0,0,7,0,7); ctx.fill(); ctx.stroke();
   ctx.restore();
@@ -1961,6 +2163,7 @@ function drawPlayer(){
 
 /* ============================== BOOT ============================== */
 goMenu();
+checkDailyStreak();
 requestAnimationFrame(loop);
 
 })();
