@@ -80,6 +80,12 @@
   #tierBanner .big{font-size:clamp(28px,6vw,52px); font-weight:900; text-shadow:0 0 20px currentColor,0 4px 0 #000; letter-spacing:2px;}
   #tierBanner .small{font-size:16px; color:#fff; text-shadow:0 2px 4px #000; margin-top:4px;}
 
+  #eventBanner{position:fixed; top:16%; left:50%; transform:translate(-50%,-50%) scale(.6); opacity:0; pointer-events:none; text-align:center; z-index:21; transition:opacity .3s, transform .3s;}
+  #eventBanner.show{opacity:1; transform:translate(-50%,-50%) scale(1);}
+  #eventBanner .big{font-size:clamp(22px,5vw,38px); font-weight:900; text-shadow:0 0 18px currentColor,0 3px 0 #000; letter-spacing:1px;}
+  #eventBanner .small{font-size:14px; color:#fff; text-shadow:0 2px 4px #000; margin-top:2px;}
+  .goQuip{color:#ffe9b0aa; font-size:13px; font-style:italic; margin-top:-6px;}
+
   #floaters{position:fixed; inset:0; pointer-events:none; z-index:15;}
   .floater{position:absolute; font-weight:900; text-shadow:0 2px 3px #000; animation:rise 0.9s ease-out forwards;}
   @keyframes rise{ from{opacity:1; transform:translateY(0);} to{opacity:0; transform:translateY(-46px);} }
@@ -154,6 +160,7 @@
 <div id="plotSigns" class="hidden"></div>
 
 <div id="tierBanner"><div class="big"></div><div class="small"></div></div>
+<div id="eventBanner"><div class="big"></div><div class="small"></div></div>
 
 <!-- MENU -->
 <div id="menu" class="center">
@@ -188,6 +195,7 @@
       🧱 Around your Keep you'll see dashed <b>foundation holes</b> with floating build signs — walk close and tap one to pour your coins in: a <b>Wall</b> (🪙50, permanent and indestructible, physically blocks enemies) or a <b>Tower</b>: 🪖 Soldier Post (balanced), 💣 Cannon Tower (splash damage), 🔮 Mage Spire (pierces multiple enemies), or ❄️ Frost Spire (slows enemies). Nothing you build can ever be destroyed — tap a built tower's sign again to upgrade it, endlessly, each level noticeably stronger. Defenses are rebuilt fresh each run.<br>
       👹 Watch out for 🟡 Swarmers (fast, weak, attack in packs) and 🟠 Bombers (rush in and explode) alongside the usual Grunts, Archers and Tanks.<br>
       🔥 Chain kills quickly for a growing Kill Combo.<br>
+      🎉 Random events pop up mid-run — 💰 Gold Rush and ⚡ Frenzy — and every so often a 🐔 Golden Chicken appears and bolts. Catch it before it escapes for a jackpot.<br>
       ⭐ Level up mid-run to pick powerful upgrades.<br>
       💀 A BOSS appears every 10 waves, each one exponentially tougher than the last — and every wave in between gets harder too. Survive 70 waves to reach <b>GOD LEVEL</b>.<br>
       🏰 Gold earned is banked to the Kingdom Treasury. Spend it in the Shop on Hero upgrades and your <b>Garrison</b> (permanent tower damage &amp; fire-rate bonuses) — these have <b>no level cap</b> and <b>double in strength every single purchase</b>, forever. Also spend it on your <b>Keep</b>, which grows through four material tiers, <b>Wood → Steel → Titanium → Futuristic</b>, each stronger tier also passively generating a trickle of coins on its own while you fight, tycoon-style.<br>
@@ -229,6 +237,7 @@
 <div id="gameover" class="center hidden">
   <div class="panel">
     <h1 class="title" style="color:#ff6b6b;">💀 YOU FELL</h1>
+    <div class="goQuip" id="goQuip"></div>
     <div class="row" style="margin:14px 0;">
       <div class="stat">Wave Reached<br><b id="goWave">1</b></div>
       <div class="stat">Tier<br><b id="goTier">Wood</b></div>
@@ -427,6 +436,27 @@ const clamp = (v,a,b)=> Math.max(a,Math.min(b,v));
 const dist2 = (ax,ay,bx,by)=>{const dx=ax-bx,dy=ay-by; return dx*dx+dy*dy;};
 const pick = arr => arr[Math.floor(Math.random()*arr.length)];
 
+const BOSS_ADJ = ["Bonkers","Chunky","Grumpy","Spicy","Fabulous","Sir","Lord","Mega","Ultra","Snacky","Wobbly","Angry","Sparkly","Cursed","Extra"];
+const BOSS_NOUN = ["Nugget","Destroyer","Beefcake","Sock Puppet","Chaos Goblin","Overlord","Muncher","Rampage","Bamboozler","Doom Bringer","Menace","Gremlin","Disaster","Party Pooper"];
+function rollBossName(){ return `${pick(BOSS_ADJ)} ${pick(BOSS_NOUN)}`; }
+
+const DEATH_QUIPS = [
+  "Skill issue.",
+  "The grunts will remember this.",
+  "Should've bought that wall.",
+  "That backpack full of coins didn't save you.",
+  "A true hero... briefly.",
+  "The archers are laughing right now.",
+  "That tank really said \"no.\"",
+  "Next time, dodge. Just an idea.",
+  "The Keep watched you fall. It felt nothing — it's a building.",
+  "Bold strategy, standing still like that.",
+  "A Bomber said hello.",
+  "You have been demoted from God Level to Ground Level.",
+];
+
+const HIT_WORDS = ["POW!","BONK!","YEET!","SMACK!","WHAM!","ZAP!","BOOF!","SPLAT!"];
+
 function floatText(x,y,text,color,size){
   const el = document.createElement("div");
   el.className="floater"; el.textContent=text;
@@ -492,6 +522,8 @@ let seenTier = null;
 let combo = 0, comboTimer = 0;
 let firstBuildDone = false;
 let keepSpin = 0;
+let activeEvent = null, eventTimer = 0;
+let chicken = null, chickenTimer = 0;
 
 function ascensionMult(){ return 1 + save.ascension*0.35; }
 
@@ -548,6 +580,9 @@ function startRun(){
   wave = 0; runGold = 0; activeBoss = null; seenTier = null;
   combo = 0; comboTimer = 0; firstBuildDone = false;
   buildAnims.length = 0;
+  activeEvent = null; eventTimer = rand(22,35);
+  chicken = null; chickenTimer = rand(18,30);
+  document.getElementById("eventBanner").classList.remove("show");
   buildWorld();
   resetPlots();
   state = "playing";
@@ -628,9 +663,10 @@ function spawnEnemy(kind, scale, am){
     slowTimer: 0, slowFactor: 0,
   };
   if(e.isBoss){
-    activeBoss = e; showBossBar(true, "GOD KING" + (save.ascension>0?` (Asc ${save.ascension})`:""));
+    const bossTitle = rollBossName();
+    activeBoss = e; showBossBar(true, bossTitle + (save.ascension>0?` (Asc ${save.ascension})`:""));
     addShake(14); screenFlash("#ff3333",300);
-    floatText(W/2, H*0.22, "⚠️ A GOD KING APPROACHES ⚠️", "#ff5252", 22);
+    floatText(W/2, H*0.22, `⚠️ ${bossTitle.toUpperCase()} APPROACHES ⚠️`, "#ff5252", 22);
   }
   enemies.push(e);
 }
@@ -933,6 +969,9 @@ function damageEnemy(e, dmg, isCrit){
   if(isCrit) addShake(3);
   spawnParticles(e.x,e.y, isCrit?"#ffd54a":"#ffffff", isCrit?10:5, 140, 0.35, isCrit?3.5:2.5);
   floatText(worldToScreenX(e.x), worldToScreenY(e.y)-e.radius, (isCrit?"CRIT ":"")+Math.round(dmg), isCrit?"#ffd54a":"#ffffff", isCrit?18:14);
+  if(!isCrit && Math.random()<0.12){
+    floatText(worldToScreenX(e.x)+rand(-14,14), worldToScreenY(e.y)-e.radius-16, pick(HIT_WORDS), "#ff9d3d", 15);
+  }
   if(e.hp<=0) killEnemy(e);
 }
 
@@ -982,6 +1021,7 @@ function onDeath(){
   document.getElementById("goWave").textContent = wave;
   document.getElementById("goTier").textContent = tierForWave(wave).icon+" "+tierForWave(wave).name;
   document.getElementById("goGold").textContent = runGold;
+  document.getElementById("goQuip").textContent = pick(DEATH_QUIPS);
   document.getElementById("hud").classList.add("hidden");
   document.getElementById("plotSigns").classList.add("hidden");
   document.getElementById("levelup").classList.add("hidden");
@@ -1021,6 +1061,76 @@ function showTierBanner(tier, w){
 function showBossBar(show, name){
   document.getElementById("bossBarWrap").style.display = show?"block":"none";
   if(name) document.getElementById("bossName").textContent = "👑 "+name;
+}
+
+/* ============================== WORLD EVENTS (fun, temporary surprises) ============================== */
+const EVENTS = {
+  goldrush: { icon:"💰", label:"GOLD RUSH!", sub:"Double gold for 10s", color:"#ffd54a", duration:10 },
+  frenzy:   { icon:"⚡", label:"FRENZY!", sub:"2x attack speed & faster feet for 8s", color:"#ff6b6b", duration:8 },
+};
+function showEventBanner(ev){
+  const el = document.getElementById("eventBanner");
+  el.querySelector(".big").textContent = `${ev.icon} ${ev.label}`;
+  el.querySelector(".big").style.color = ev.color;
+  el.querySelector(".small").textContent = ev.sub;
+  el.classList.add("show");
+  sfx.tier(); addShake(6);
+  setTimeout(()=>el.classList.remove("show"), 1800);
+}
+function triggerRandomEvent(){
+  const key = pick(Object.keys(EVENTS));
+  const ev = EVENTS[key];
+  activeEvent = { key, endTime: elapsed + ev.duration };
+  showEventBanner(ev);
+}
+function endEvent(){ activeEvent = null; }
+
+/* ============================== GOLDEN CHICKEN (silly rare chase target) ============================== */
+function spawnChicken(){
+  const ang = rand(0, Math.PI*2), r = 420;
+  chicken = {
+    x: clamp(player.x+Math.cos(ang)*r, 40, WORLD.w-40),
+    y: clamp(player.y+Math.sin(ang)*r, 40, WORLD.h-40),
+    radius: 11, hp: 3, life: 13, wobble: rand(0,6.28),
+  };
+  floatText(W/2, H*0.3, "🐔 A Golden Chicken appeared! Catch it!", "#ffe14d", 16);
+}
+function fleeChicken(dt){
+  if(!chicken) return;
+  chicken.life -= dt;
+  chicken.wobble += dt*8;
+  if(chicken.life<=0){ chicken=null; floatText(W/2, H*0.3, "🐔 The chicken got away...", "#ffe9b0", 14); return; }
+  const dx = chicken.x-player.x, dy = chicken.y-player.y;
+  const d = Math.hypot(dx,dy)||1;
+  const speed = player.baseSpeed*0.82;
+  const nx = dx/d, ny = dy/d;
+  chicken.x = clamp(chicken.x+nx*speed*dt, 20, WORLD.w-20);
+  chicken.y = clamp(chicken.y+ny*speed*dt, 20, WORLD.h-20);
+  if(d < player.radius+chicken.radius+6){
+    const goldVal = 20 + wave*2, xpVal = 10 + wave;
+    coins.push({x:chicken.x,y:chicken.y,val:goldVal, vx:rand(-40,40), vy:rand(-40,40)});
+    xporbs.push({x:chicken.x,y:chicken.y,val:xpVal, vx:rand(-40,40), vy:rand(-40,40)});
+    spawnParticles(chicken.x,chicken.y,"#ffe14d",22,180,0.5,3);
+    addShake(5); sfx.coin();
+    floatText(W/2, H*0.3, "🐔 Caught! Jackpot!", "#ffd54a", 18);
+    chicken = null;
+  }
+}
+function drawChicken(){
+  if(!chicken) return;
+  const x=worldToScreenX(chicken.x), y=worldToScreenY(chicken.y)+Math.sin(chicken.wobble)*3;
+  ctx.save(); ctx.translate(x,y);
+  ctx.fillStyle="#00000055";
+  ctx.beginPath(); ctx.ellipse(0,9,10,4,0,0,7); ctx.fill();
+  ctx.fillStyle="#fff7d6"; ctx.strokeStyle="#e0c060"; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(0,0,9,0,7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle="#ffd54a";
+  ctx.beginPath(); ctx.moveTo(-6,-4); ctx.lineTo(-13,-2); ctx.lineTo(-6,1); ctx.closePath(); ctx.fill();
+  ctx.fillStyle="#ff8c3d";
+  ctx.beginPath(); ctx.moveTo(9,-1); ctx.lineTo(15,1); ctx.lineTo(9,3); ctx.closePath(); ctx.fill();
+  ctx.fillStyle="#c0392b";
+  ctx.beginPath(); ctx.arc(-1,-9,3,0,7); ctx.fill();
+  ctx.restore();
 }
 function launchConfetti(){
   const wrap = document.getElementById("confettiWrap");
@@ -1196,10 +1306,13 @@ function loop(t){
 
 function update(dt){
   elapsed += dt;
+  const frenzyActive = !!(activeEvent && activeEvent.key==="frenzy");
+  const goldrushActive = !!(activeEvent && activeEvent.key==="goldrush");
 
   // player movement
   const {dx,dy} = inputVector();
-  player.vx = dx*player.baseSpeed; player.vy = dy*player.baseSpeed;
+  const moveSpeed = player.baseSpeed * (frenzyActive?1.3:1);
+  player.vx = dx*moveSpeed; player.vy = dy*moveSpeed;
   if(dx||dy) player.facing = Math.atan2(dy,dx);
   player.x = clamp(player.x+player.vx*dt, 20, WORLD.w-20);
   player.y = clamp(player.y+player.vy*dt, 20, WORLD.h-20);
@@ -1313,7 +1426,7 @@ function update(dt){
   if(player.atkCooldown<=0){
     const target = nearestEnemy(player.x,player.y,player.range);
     if(target){
-      player.atkCooldown = 1/player.atkSpeed;
+      player.atkCooldown = 1/(player.atkSpeed*(frenzyActive?2:1));
       const baseAng = Math.atan2(target.y-player.y, target.x-player.x);
       const n = player.multishot;
       const spread = Math.min(0.55, 0.12*(n-1));
@@ -1375,8 +1488,9 @@ function update(dt){
       c.x += (player.x-c.x)/d*260*dt; c.y += (player.y-c.y)/d*260*dt;
     } else { c.x+=c.vx*dt*0.3; c.y+=c.vy*dt*0.3; c.vx*=0.9; c.vy*=0.9; }
     if(d2 < (player.radius+10)*(player.radius+10)){
-      c.dead=true; runGold += Math.round(c.val*player.goldMult); sfx.coin();
-      floatText(worldToScreenX(player.x)+rand(-10,10), worldToScreenY(player.y)-20, "+"+Math.round(c.val*player.goldMult)+"🪙","#ffd54a",13);
+      const gain = Math.round(c.val*player.goldMult*(goldrushActive?2:1));
+      c.dead=true; runGold += gain; sfx.coin();
+      floatText(worldToScreenX(player.x)+rand(-10,10), worldToScreenY(player.y)-20, "+"+gain+"🪙","#ffd54a",13);
     }
   }
   coins = coins.filter(c=>!c.dead);
@@ -1401,6 +1515,20 @@ function update(dt){
 
   if(shake>0) shake = Math.max(0, shake-dt*40);
   if(comboTimer>0){ comboTimer -= dt; if(comboTimer<=0) combo = 0; }
+
+  // world events
+  if(activeEvent){
+    if(elapsed >= activeEvent.endTime) endEvent();
+  } else {
+    eventTimer -= dt;
+    if(eventTimer<=0){ triggerRandomEvent(); eventTimer = rand(30,45); }
+  }
+  // golden chicken
+  if(chicken) fleeChicken(dt);
+  else {
+    chickenTimer -= dt;
+    if(chickenTimer<=0){ spawnChicken(); chickenTimer = rand(35,55); }
+  }
 
   // wave completion check
   if(waveActive && spawnQueue.length===0 && enemies.length===0){
@@ -1676,6 +1804,7 @@ function drawWorldEntities(){
     if(p.type==="tower" && p.built) drawList.push({y:p.y, draw:()=>drawTower(p)});
   }
   for(const e of enemies) drawList.push({y:e.y, draw:()=>drawEnemy(e)});
+  if(chicken) drawList.push({y:chicken.y, draw:drawChicken});
   drawList.push({y:player.y, draw:()=>drawPlayer()});
   drawList.sort((a,b)=>a.y-b.y);
   for(const item of drawList) item.draw();
