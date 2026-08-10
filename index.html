@@ -22,6 +22,7 @@
   h1.title{font-size:clamp(30px,7vw,58px); margin:0; color:var(--gold); letter-spacing:2px;
     text-shadow:0 0 10px #ffb52caa,0 4px 0 #7a4a00,0 6px 10px #000; font-weight:900;}
   .subtitle{color:#ffe9b0; font-size:14px; letter-spacing:3px; margin-top:-8px; opacity:.85;}
+  .goalLine{color:#cfe9ff; font-size:14px; line-height:1.7; max-width:360px;}
   h2.section{color:var(--gold); font-size:18px; margin:18px 0 10px; letter-spacing:1px;}
 
   .btn{font-family:inherit; font-weight:800; font-size:18px; letter-spacing:1px; color:#3a2400;
@@ -39,17 +40,22 @@
   #hud{position:fixed; inset:0; pointer-events:none; font-weight:700; color:#fff;}
   #topbar{position:absolute; top:10px; left:10px; right:10px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
   .hud-pill{pointer-events:auto; background:#1c1408d0; border:2px solid #5a3d12; border-radius:10px; padding:6px 12px; display:flex; align-items:center; gap:6px; box-shadow:0 3px 8px #0006;}
-  #waveLabel{font-size:15px; color:#ffe9b0;}
-  #tierLabel{font-weight:900; font-size:15px;}
+  #waveTierPill{display:flex; flex-direction:column; align-items:flex-start; line-height:1.3; gap:0;}
+  #waveLabel{font-size:14px; color:#ffe9b0;}
+  #tierLabel{font-weight:900; font-size:14px;}
   #goldPill{color:var(--gold); font-size:16px;}
   #shieldPill{color:var(--shield); font-size:15px; display:none;}
 
-  #bars{position:absolute; top:54px; left:10px; right:10px; display:flex; flex-direction:column; gap:5px; max-width:340px;}
-  .barTrack{height:16px; border-radius:8px; background:#0006; border:2px solid #0008; overflow:hidden; position:relative;}
+  #bars{position:absolute; top:56px; left:10px; right:10px; display:flex; flex-direction:column; gap:6px; max-width:340px;}
+  .barTrack{height:20px; border-radius:9px; background:#0006; border:2px solid #0008; overflow:hidden; position:relative;}
   .barFill{height:100%; width:0%; transition:width .15s ease-out;}
   #hpFill{background:linear-gradient(#ff8a90,var(--hp));}
   #xpFill{background:linear-gradient(#9fe9ff,var(--xp));}
-  .barText{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:10px; text-shadow:0 1px 2px #000;}
+  .barTrack.xp{height:10px; border-radius:5px;}
+  .barText{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:11px; text-shadow:0 1px 2px #000;}
+
+  #tutorialHint{position:fixed; left:50%; bottom:14%; transform:translateX(-50%); text-align:center; z-index:16; pointer-events:none; transition:opacity .5s;}
+  #tutorialHint div{background:#000a; border:2px solid #ffd54a88; border-radius:12px; padding:10px 18px; margin-bottom:8px; font-size:15px; color:#fff; font-weight:700; text-shadow:0 2px 3px #000;}
 
   #bossBarWrap{position:absolute; top:10px; left:50%; transform:translateX(-50%); width:min(560px,90vw); text-align:center;}
   #bossName{color:#ff8a8a; font-size:14px; text-shadow:0 2px 3px #000; margin-bottom:3px; letter-spacing:2px;}
@@ -111,14 +117,16 @@
 
 <div id="hud" class="hidden">
   <div id="topbar">
-    <div class="hud-pill"><span id="waveLabel">Wave 1</span></div>
-    <div class="hud-pill"><span id="tierLabel">🪵 WOOD</span></div>
+    <div class="hud-pill" id="waveTierPill">
+      <span id="waveLabel">Wave 1 / 70</span>
+      <span id="tierLabel">🪵 WOOD</span>
+    </div>
     <div class="hud-pill"><span id="goldPill">🪙 0</span></div>
     <div class="hud-pill" id="shieldPill">🛡 0</div>
   </div>
   <div id="bars">
     <div class="barTrack"><div id="hpFill" class="barFill"></div><div class="barText" id="hpText"></div></div>
-    <div class="barTrack" style="height:11px;"><div id="xpFill" class="barFill"></div></div>
+    <div class="barTrack xp"><div id="xpFill" class="barFill"></div></div>
   </div>
   <div id="bossBarWrap" style="display:none;">
     <div id="bossName">BOSS</div>
@@ -126,6 +134,11 @@
   </div>
   <div id="joyBase"></div>
   <div id="joyStick"></div>
+  <div id="tutorialHint" class="hidden">
+    <div>🕹️ DRAG ANYWHERE TO MOVE</div>
+    <div>🏹 YOU AUTO-ATTACK NEARBY ENEMIES</div>
+    <div>🎯 SURVIVE 70 WAVES TO REACH GOD LEVEL</div>
+  </div>
 </div>
 
 <div id="tierBanner"><div class="big"></div><div class="small"></div></div>
@@ -134,6 +147,7 @@
 <div id="menu" class="center">
   <h1 class="title">👑 KUKUS 👑</h1>
   <div class="subtitle">PATH&nbsp;TO&nbsp;GOD&nbsp;LEVEL</div>
+  <div class="goalLine">🕹️ Drag to move · 🏹 auto-attack nearby enemies<br>🎯 Survive 70 waves to reach GOD LEVEL</div>
   <div class="panel" style="margin-top:10px;">
     <div class="row" style="margin-bottom:14px;">
       <div class="stat">🏆 Best Wave<br><b id="menuBest">1</b></div>
@@ -258,6 +272,7 @@ function defaultSave(){
     bankedGold: 0,
     ascension: 0,
     keepLevel: 0,
+    tutorialSeen: false,
     meta: { dmg:0, hp:0, spd:0, luck:0, regen:0 }
   };
 }
@@ -359,6 +374,24 @@ function screenFlash(color, dur){
 let shake = 0;
 function addShake(v){ shake = Math.min(24, shake+v); }
 
+/* ============================== TUTORIAL HINT ============================== */
+let tutorialDismissed = true;
+function showTutorialHint(){
+  tutorialDismissed = false;
+  const el = document.getElementById("tutorialHint");
+  el.classList.remove("hidden");
+  el.style.opacity = "1";
+  setTimeout(dismissTutorialHint, 7000);
+}
+function dismissTutorialHint(){
+  if(tutorialDismissed) return;
+  tutorialDismissed = true;
+  const el = document.getElementById("tutorialHint");
+  el.style.opacity = "0";
+  setTimeout(()=>el.classList.add("hidden"), 500);
+  if(!save.tutorialSeen){ save.tutorialSeen = true; persist(); }
+}
+
 /* ============================== AUDIO (procedural) ============================== */
 let actx = null;
 function ensureAudio(){ if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }
@@ -394,10 +427,10 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
 if(THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x203a17);
-scene.fog = new THREE.Fog(0x203a17, 700, 1900);
+scene.background = new THREE.Color(0x2c4a1e);
+scene.fog = new THREE.Fog(0x2c4a1e, 750, 1900);
 
-const hemiLight = new THREE.HemisphereLight(0xcfe8ff, 0x1c3113, 1.0);
+const hemiLight = new THREE.HemisphereLight(0xe8f5ff, 0x2c4a1e, 1.15);
 scene.add(hemiLight);
 const sunLight = new THREE.DirectionalLight(0xfff2d0, 1.05);
 sunLight.position.set(260, 420, 180);
@@ -431,15 +464,32 @@ window.addEventListener("resize", resize);
 resize();
 
 /* ---- procedural textures ---- */
+function makeToonGradient(){
+  const cv = document.createElement("canvas"); cv.width=4; cv.height=1;
+  const c = cv.getContext("2d");
+  const shades = [90,150,205,255];
+  for(let i=0;i<4;i++){ c.fillStyle = `rgb(${shades[i]},${shades[i]},${shades[i]})`; c.fillRect(i,0,1,1); }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.minFilter = THREE.NearestFilter; tex.magFilter = THREE.NearestFilter;
+  return tex;
+}
+const TOON_GRADIENT = makeToonGradient();
+function toonMat(hex, extra){
+  return new THREE.MeshToonMaterial(Object.assign({color:hex, gradientMap:TOON_GRADIENT}, extra||{}));
+}
+function addOutline(parent, geometry, scale, color){
+  const outline = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({color:color!=null?color:0x1a1206, side:THREE.BackSide}));
+  outline.scale.multiplyScalar(scale||1.08);
+  parent.add(outline);
+  return outline;
+}
 function makeGrassTexture(){
   const s = 128;
   const cv = document.createElement("canvas"); cv.width=s; cv.height=s;
   const c = cv.getContext("2d");
-  c.fillStyle = "#2c4a1e"; c.fillRect(0,0,s,s);
-  c.fillStyle = "#33531f";
-  for(let y=0;y<s;y+=16) for(let x=0;x<s;x+=16) if(((x+y)/16)%2===0) c.fillRect(x,y,16,16);
-  c.fillStyle = "#25401a";
-  for(let i=0;i<220;i++){ c.fillRect(Math.random()*s, Math.random()*s, 1.5, 1.5); }
+  c.fillStyle = "#3a5c26"; c.fillRect(0,0,s,s);
+  c.fillStyle = "#3f6329";
+  for(let y=0;y<s;y+=32) for(let x=0;x<s;x+=32) if(((x+y)/32)%2===0) c.fillRect(x,y,32,32);
   const tex = new THREE.CanvasTexture(cv);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   return tex;
@@ -462,17 +512,17 @@ const spawnCenter = { x: WORLD.w/2, y: WORLD.h/2 };
 const keepPos = { x: spawnCenter.x, y: spawnCenter.y - 110 };
 
 const grassTex = makeGrassTexture();
-grassTex.repeat.set(WORLD.w/16, WORLD.h/16);
+grassTex.repeat.set(WORLD.w/32, WORLD.h/32);
 const groundGeo = new THREE.PlaneGeometry(WORLD.w, WORLD.h, 1, 1);
 groundGeo.rotateX(-Math.PI/2);
-const groundMat = new THREE.MeshStandardMaterial({map:grassTex, roughness:1, metalness:0});
+const groundMat = toonMat(0xffffff, {map:grassTex});
 const groundMesh = new THREE.Mesh(groundGeo, groundMat);
 groundMesh.position.set(WORLD.w/2, 0, WORLD.h/2);
 scene.add(groundMesh);
 
 const plankTex = makePlankTexture();
 plankTex.repeat.set(WORLD.w/64, 3);
-const fenceMat = new THREE.MeshStandardMaterial({map:plankTex, roughness:0.9});
+const fenceMat = toonMat(0xffffff, {map:plankTex});
 function addFenceWall(cx,cz,w,d){
   const wall = new THREE.Mesh(new THREE.BoxGeometry(w,14,d), fenceMat);
   wall.position.set(cx,7,cz);
@@ -513,21 +563,20 @@ function makeShadow(radius){
 }
 
 /* ---- decorations ---- */
+const treeLeafMat = toonMat(0x357a34);
+const treeTrunkMat = toonMat(0x5b3a1e);
+const rockMat = toonMat(0x9a9a9a);
 function buildTree(){
   const g = new THREE.Group();
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(3,3.6,16,6), new THREE.MeshStandardMaterial({color:0x5b3a1e, roughness:0.9}));
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(3,3.6,16,6), treeTrunkMat);
   trunk.position.y = 8; g.add(trunk);
-  const leafMat = new THREE.MeshStandardMaterial({color:0x2f6b2f, roughness:0.85});
-  for(let i=0;i<3;i++){
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(20-i*4, 22, 8), leafMat);
-    cone.position.y = 16 + i*14;
-    g.add(cone);
-  }
+  const leaves = new THREE.Mesh(new THREE.ConeGeometry(19,34,8), treeLeafMat);
+  leaves.position.y = 30; g.add(leaves);
   return g;
 }
 function buildRock(){
   const g = new THREE.Group();
-  const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(10,0), new THREE.MeshStandardMaterial({color:0x8a8a8a, roughness:1, flatShading:true}));
+  const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(10,0), rockMat);
   rock.position.y = 7; rock.rotation.set(rand(0,3),rand(0,3),rand(0,3));
   g.add(rock);
   return g;
@@ -556,13 +605,13 @@ function buildDecorations(){
 let keepMesh = null;
 function buildKeepMesh(level){
   const group = new THREE.Group();
-  const foundation = new THREE.Mesh(new THREE.CylinderGeometry(48,52,6,16), new THREE.MeshStandardMaterial({color:0x4a3a28, roughness:1}));
+  const foundation = new THREE.Mesh(new THREE.CylinderGeometry(48,52,6,16), toonMat(0x4a3a28));
   foundation.position.y = 3; group.add(foundation);
 
   if(level<=0){
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(1.2,1.2,42,8), new THREE.MeshStandardMaterial({color:0x5b3a1e}));
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(1.2,1.2,42,8), toonMat(0x5b3a1e));
     pole.position.y = 27; group.add(pole);
-    const flag = new THREE.Mesh(new THREE.PlaneGeometry(16,11), new THREE.MeshStandardMaterial({color:0xd8d8d8, side:THREE.DoubleSide}));
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(16,11), toonMat(0xd8d8d8, {side:THREE.DoubleSide}));
     flag.position.set(8,42,0); group.add(flag);
     group.position.set(keepPos.x, 0, keepPos.y);
     return group;
@@ -571,8 +620,9 @@ function buildKeepMesh(level){
   const tierIdx = keepTierIndex(level);
   const within = keepWithinTier(level);
   const t = KEEP_TIERS[tierIdx];
-  const mat = new THREE.MeshStandardMaterial({color:t.base, metalness:t.metalness, roughness:t.roughness, emissive:t.emissive, emissiveIntensity: tierIdx===3?0.55:0});
-  const accentMat = new THREE.MeshStandardMaterial({color:t.accent, metalness:t.metalness, roughness:t.roughness, emissive: tierIdx===3?t.accent:0x000000, emissiveIntensity: tierIdx===3?1.1:0});
+  const flat = tierIdx<2; // wood & steel read as simple flat-shaded materials; titanium/futuristic get a glossier finish
+  const mat = flat ? toonMat(t.base) : new THREE.MeshStandardMaterial({color:t.base, metalness:t.metalness, roughness:t.roughness, emissive:t.emissive, emissiveIntensity: tierIdx===3?0.55:0});
+  const accentMat = flat ? toonMat(t.accent) : new THREE.MeshStandardMaterial({color:t.accent, metalness:t.metalness, roughness:t.roughness, emissive: tierIdx===3?t.accent:0x000000, emissiveIntensity: tierIdx===3?1.1:0});
   const bodyHeight = 34 + within*11;
   group.userData.spin = [];
 
@@ -637,23 +687,27 @@ function refreshKeepMesh(){
 /* ---- Player mesh ---- */
 function buildPlayerMesh(){
   const g = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({color:0xf0c27b, roughness:0.7});
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(9,10,22,10), bodyMat);
+  const bodyGeo = new THREE.CylinderGeometry(9,10,22,10);
+  const headGeo = new THREE.SphereGeometry(8,12,10);
+  const bodyMat = toonMat(0xf0c27b);
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
   body.position.y = 15; g.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(8,12,10), bodyMat);
+  addOutline(body, bodyGeo, 1.08);
+  const head = new THREE.Mesh(headGeo, bodyMat);
   head.position.y = 30; g.add(head);
-  const capeMat = new THREE.MeshStandardMaterial({color:0x2a4fd6, side:THREE.DoubleSide, roughness:0.8});
+  addOutline(head, headGeo, 1.12);
+  const capeMat = toonMat(0x2a4fd6, {side:THREE.DoubleSide});
   const cape = new THREE.Mesh(new THREE.PlaneGeometry(14,20), capeMat);
   cape.position.set(0,16,-8); cape.rotation.x = 0.25; g.add(cape);
-  const crownMat = new THREE.MeshStandardMaterial({color:0xffd54a, metalness:0.6, roughness:0.3, emissive:0x5a3d00, emissiveIntensity:0.4});
+  const crownMat = toonMat(0xffd54a, {emissive:0x5a3d00, emissiveIntensity:0.4});
   const crown = new THREE.Mesh(new THREE.ConeGeometry(6,8,5), crownMat);
   crown.position.y = 39; g.add(crown);
   const weapon = new THREE.Group();
-  const bow = new THREE.Mesh(new THREE.TorusGeometry(9,1,6,10,Math.PI*1.3), new THREE.MeshStandardMaterial({color:0x5b3a1e}));
+  const bow = new THREE.Mesh(new THREE.TorusGeometry(9,1,6,10,Math.PI*1.3), toonMat(0x5b3a1e));
   bow.rotation.y = Math.PI/2; bow.position.set(10,16,0);
   weapon.add(bow);
   g.add(weapon);
-  const shieldRing = new THREE.Mesh(new THREE.TorusGeometry(16,1.4,8,24), new THREE.MeshStandardMaterial({color:0x39ffe0, emissive:0x39ffe0, emissiveIntensity:1.2, transparent:true, opacity:0.85}));
+  const shieldRing = new THREE.Mesh(new THREE.TorusGeometry(16,1.4,8,24), new THREE.MeshBasicMaterial({color:0x39ffe0, transparent:true, opacity:0.85}));
   shieldRing.rotation.x = Math.PI/2; shieldRing.position.y = 16; shieldRing.visible=false;
   g.add(shieldRing);
   const shadow = makeShadow(13); g.add(shadow);
@@ -662,16 +716,18 @@ function buildPlayerMesh(){
 
 /* ---- Enemy meshes ---- */
 const ENEMY_BASE = {
-  grunt: {hp:22, dmg:9, spd:95, radius:15, color:0xc0392b, xp:3, gold:2, melee:true},
-  archer:{hp:15, dmg:7, spd:80, radius:13, color:0x8e44ad, xp:4, gold:3, ranged:true, range:260, shotCd:1.6},
-  tank:  {hp:70, dmg:15, spd:55, radius:22, color:0x616a6b, xp:7, gold:5, melee:true},
-  boss:  {hp:900, dmg:22, spd:62, radius:42, color:0x7a0d0d, xp:60, gold:80, melee:true, ranged:true, range:300, shotCd:1.1},
+  grunt: {hp:22, dmg:9, spd:95, radius:15, color:0xd6432f, xp:3, gold:2, melee:true},
+  archer:{hp:15, dmg:7, spd:80, radius:13, color:0x9b3fc0, xp:4, gold:3, ranged:true, range:260, shotCd:1.6},
+  tank:  {hp:70, dmg:15, spd:55, radius:22, color:0xd6702b, xp:7, gold:5, melee:true},
+  boss:  {hp:900, dmg:22, spd:62, radius:42, color:0x8a0e0e, xp:60, gold:80, melee:true, ranged:true, range:300, shotCd:1.1},
 };
 function buildEnemyMesh(kind, radius){
   const g = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({color:ENEMY_BASE[kind].color, roughness:0.75});
-  const body = new THREE.Mesh(new THREE.SphereGeometry(radius,12,10), bodyMat);
+  const bodyGeo = new THREE.SphereGeometry(radius,12,10);
+  const bodyMat = toonMat(ENEMY_BASE[kind].color);
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
   body.position.y = radius; g.add(body);
+  addOutline(body, bodyGeo, 1.1);
   const eyeMat = new THREE.MeshBasicMaterial({color:0xffffff});
   const pupilMat = new THREE.MeshBasicMaterial({color:0x000000});
   for(const side of [-1,1]){
@@ -683,7 +739,7 @@ function buildEnemyMesh(kind, radius){
     g.add(pupil);
   }
   if(kind==="boss"){
-    const crownMat = new THREE.MeshStandardMaterial({color:0xffd54a, metalness:0.6, roughness:0.3, emissive:0x5a3d00, emissiveIntensity:0.5});
+    const crownMat = toonMat(0xffd54a, {emissive:0x5a3d00, emissiveIntensity:0.5});
     for(let i=-2;i<=2;i++){
       const spike = new THREE.Mesh(new THREE.ConeGeometry(3.5,10,4), crownMat);
       spike.position.set(i*7, radius*2+2, 0);
@@ -771,6 +827,7 @@ function startRun(){
   hideAllScreens();
   nextWave();
   updateHud();
+  if(!save.tutorialSeen) showTutorialHint();
 }
 
 function nextWave(){
@@ -872,7 +929,12 @@ function openLevelUpUI(){
 
 /* ============================== INPUT ============================== */
 const keys = {};
-window.addEventListener("keydown", e=>{ keys[e.key.toLowerCase()]=true; });
+const MOVE_KEYS = new Set(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"]);
+window.addEventListener("keydown", e=>{
+  const k = e.key.toLowerCase();
+  keys[k]=true;
+  if(MOVE_KEYS.has(k)) dismissTutorialHint();
+});
 window.addEventListener("keyup", e=>{ keys[e.key.toLowerCase()]=false; });
 
 let pointerActive=false, pointerId=null, joyBaseX=0, joyBaseY=0, joyX=0, joyY=0;
@@ -882,6 +944,7 @@ const joyStickEl = document.getElementById("joyStick");
 function onPointerDown(e){
   ensureAudio();
   if(state!=="playing") return;
+  dismissTutorialHint();
   pointerActive = true; pointerId = e.pointerId;
   joyBaseX = e.clientX; joyBaseY = e.clientY; joyX=joyBaseX; joyY=joyBaseY;
   joyBaseEl.style.display="block"; joyStickEl.style.display="block";
@@ -1348,6 +1411,7 @@ function update(dt){
     waveActive = false;
     intermission = wave===FINAL_WAVE ? 0 : 1.6;
     if(wave===FINAL_WAVE){ onVictory(); return; }
+    floatText(W/2, H*0.28, `✅ Wave ${wave} Cleared!`, "#7CFF6B", 19);
   }
   if(!waveActive && state==="playing"){
     intermission -= dt;
