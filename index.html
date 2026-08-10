@@ -57,6 +57,16 @@
   #tutorialHint{position:fixed; left:50%; bottom:14%; transform:translateX(-50%); text-align:center; z-index:16; pointer-events:none; transition:opacity .5s;}
   #tutorialHint div{background:#000a; border:2px solid #ffd54a88; border-radius:12px; padding:10px 18px; margin-bottom:8px; font-size:15px; color:#fff; font-weight:700; text-shadow:0 2px 3px #000;}
 
+  #plotSigns{position:fixed; inset:0; pointer-events:none; z-index:12;}
+  .plotSign{position:absolute; transform:translate(-50%,-100%); pointer-events:auto; cursor:pointer; text-align:center;
+    background:linear-gradient(#3a2a12,#241a0c); border:2px solid #ffd54a; border-radius:8px; padding:5px 9px;
+    font-weight:800; font-size:12px; color:#ffe9b0; box-shadow:0 3px 8px #0008; white-space:nowrap; transition:transform .1s;}
+  .plotSign:active{transform:translate(-50%,-100%) scale(0.92);}
+  .plotSign.upgrade{border-color:#5ec8ff;}
+  .plotSign.unaffordable{opacity:.55;}
+  .plotSign .cost{display:block; color:var(--gold); font-size:13px;}
+  .plotSign.upgrade .cost{color:#8fe3ff;}
+
   #bossBarWrap{position:absolute; top:10px; left:50%; transform:translateX(-50%); width:min(560px,90vw); text-align:center;}
   #bossName{color:#ff8a8a; font-size:14px; text-shadow:0 2px 3px #000; margin-bottom:3px; letter-spacing:2px;}
   #bossBar{height:14px; border-radius:7px; background:#0007; border:2px solid #3a0000; overflow:hidden;}
@@ -137,9 +147,11 @@
   <div id="tutorialHint" class="hidden">
     <div>🕹️ DRAG ANYWHERE TO MOVE</div>
     <div>🏹 YOU AUTO-ATTACK NEARBY ENEMIES</div>
+    <div>🧱 TAP SIGNS NEAR YOUR KEEP TO BUILD DEFENSES</div>
     <div>🎯 SURVIVE 70 WAVES TO REACH GOD LEVEL</div>
   </div>
 </div>
+<div id="plotSigns" class="hidden"></div>
 
 <div id="tierBanner"><div class="big"></div><div class="small"></div></div>
 
@@ -147,7 +159,7 @@
 <div id="menu" class="center">
   <h1 class="title">👑 KUKUS 👑</h1>
   <div class="subtitle">PATH&nbsp;TO&nbsp;GOD&nbsp;LEVEL</div>
-  <div class="goalLine">🕹️ Drag to move · 🏹 auto-attack nearby enemies<br>🎯 Survive 70 waves to reach GOD LEVEL</div>
+  <div class="goalLine">🕹️ Drag to move · 🏹 auto-attack nearby enemies<br>🧱 build walls &amp; soldiers around your Keep<br>🎯 Survive 70 waves to reach GOD LEVEL</div>
   <div class="panel" style="margin-top:10px;">
     <div class="row" style="margin-bottom:14px;">
       <div class="stat">🏆 Best Wave<br><b id="menuBest">1</b></div>
@@ -173,9 +185,10 @@
       🕹️ <b>Move:</b> drag / swipe anywhere (or WASD / arrow keys).<br>
       🏹 Your hero auto-fires at the nearest enemy — just stay alive and keep moving!<br>
       💰 <b>Kill enemies for coins</b> (and XP) — this is a tycoon at heart: fight to earn, then spend to grow.<br>
+      🧱 Around your Keep you'll see floating <b>build signs</b> — tap one to build a <b>Wall</b> (🪙50, blocks and slows enemies, but they'll chip away at it) or a <b>Soldier Post</b> (an auto-turret that fights for you). Tap a built Soldier Post's sign again to <b>upgrade</b> it. Defenses are rebuilt fresh each run.<br>
       ⭐ Level up mid-run to pick powerful upgrades.<br>
       👹 A BOSS appears every 10 waves. Survive 70 waves to reach <b>GOD LEVEL</b>.<br>
-      🏰 Gold earned is banked to the Kingdom Treasury. Spend it in the Shop on hero upgrades <i>and</i> on constructing your <b>Keep</b> — it grows through four material tiers, <b>Wood → Steel → Titanium → Futuristic</b>, each stronger tier also passively generating a trickle of coins on its own while you fight, tycoon-style.<br>
+      🏰 Gold earned is banked to the Kingdom Treasury. Spend it in the Shop on hero upgrades, on your <b>Garrison</b> (permanent Wall HP &amp; Soldier damage bonuses), and on constructing your <b>Keep</b> — it grows through four material tiers, <b>Wood → Steel → Titanium → Futuristic</b>, each stronger tier also passively generating a trickle of coins on its own while you fight, tycoon-style.<br>
       🛡 A fully-built Futuristic Keep also grants an Energy Shield that blocks hits and slowly recharges.<br>
       🔁 After reaching God Level you can <b>Ascend</b> for a harder, more rewarding new journey.
     </p>
@@ -195,6 +208,9 @@
     <h2 class="section">🏰 Keep Construction</h2>
     <div class="tierTrack" id="tierTrack"></div>
     <div class="shopGrid keepGrid" id="keepGrid"></div>
+
+    <h2 class="section">🪖 Garrison</h2>
+    <div class="shopGrid" id="garrisonGrid"></div>
 
     <button class="btn secondary" id="shopBack" style="margin-top:20px;">Back</button>
   </div>
@@ -252,7 +268,10 @@ const SAVE_KEY = "kukus_save_v1";
 function loadSave(){
   try{
     const s = JSON.parse(localStorage.getItem(SAVE_KEY));
-    if(s && typeof s === "object") return Object.assign(defaultSave(), s, {meta:Object.assign(defaultSave().meta, s.meta||{})});
+    if(s && typeof s === "object") return Object.assign(defaultSave(), s, {
+      meta: Object.assign(defaultSave().meta, s.meta||{}),
+      garrison: Object.assign(defaultSave().garrison, s.garrison||{}),
+    });
   }catch(e){}
   return defaultSave();
 }
@@ -263,11 +282,21 @@ function defaultSave(){
     ascension: 0,
     keepLevel: 0,
     tutorialSeen: false,
-    meta: { dmg:0, hp:0, spd:0, luck:0, regen:0 }
+    meta: { dmg:0, hp:0, spd:0, luck:0, regen:0 },
+    garrison: { dmg:0, wallHp:0 }
   };
 }
 let save = loadSave();
 function persist(){ localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }
+
+const GARRISON = {
+  dmg:    { name:"Weaponsmith", icon:"🗡️", desc:"+8% soldier damage per level", cost:l=>Math.round(26*Math.pow(1.23,l)), max:30 },
+  wallHp: { name:"Engineer",    icon:"🧱", desc:"+12% wall HP per level",       cost:l=>Math.round(24*Math.pow(1.23,l)), max:30 },
+};
+function garrisonBonus(){
+  const g = save.garrison;
+  return { dmgMult: 1+g.dmg*0.08, wallHpMult: 1+g.wallHp*0.12 };
+}
 
 const META = {
   dmg:  { name:"Blacksmith", icon:"⚔️", desc:"+6% base damage per level", cost:l=>Math.round(20*Math.pow(1.22,l)), max:40 },
@@ -502,8 +531,10 @@ function startRun(){
   enemies = []; projectiles = []; enemyProjectiles = []; coins = []; xporbs = []; particles = [];
   wave = 0; runGold = 0; activeBoss = null; seenTier = null;
   buildWorld();
+  resetPlots();
   state = "playing";
   document.getElementById("hud").classList.remove("hidden");
+  document.getElementById("plotSigns").classList.remove("hidden");
   hideAllScreens();
   nextWave();
   updateHud(true);
@@ -564,6 +595,141 @@ function spawnEnemy(kind, scale, am){
   };
   if(e.isBoss){ activeBoss = e; showBossBar(true, "GOD KING" + (save.ascension>0?` (Asc ${save.ascension})`:"")); }
   enemies.push(e);
+}
+
+/* ============================== BASE DEFENSE (walls + auto-soldiers) ==============================
+   A tycoon-tower-defense layer around the Keep: tap a floating sign to build a Wall (blocks/slows
+   enemies, but they'll chip through it) or a Soldier Post (a static auto-turret you can upgrade).
+   Built fresh each run with in-run gold; permanent Garrison shop upgrades carry across runs. */
+const WALL_COST = 50;
+const WALL_BASE_HP = 140;
+const SOLDIER_BASE_COST = 120;
+const SOLDIER_MAX_LEVEL = 5;
+function soldierUpgradeCost(nextLevel){ return Math.round(SOLDIER_BASE_COST*0.8*Math.pow(1.5, nextLevel-1)); }
+function soldierStats(level){
+  const gb = garrisonBonus();
+  return {
+    dmg: (8 + level*4) * gb.dmgMult,
+    range: 210 + level*12,
+    fireRate: 1.1 + level*0.15,
+  };
+}
+
+const baseCenter = { x: WORLD.w/2, y: WORLD.h/2 };
+const WALL_ANGLES = [45,90,135,225,270,315]; // degrees; gaps at 0 and 180 are the entrances
+const SOLDIER_ANGLES = [45,135,225,315]; // flank the entrances from just inside the wall ring
+const WALL_RADIUS = 200, SOLDIER_RADIUS = 145;
+const plots = [];
+for(const deg of WALL_ANGLES){
+  const rad = deg*Math.PI/180;
+  plots.push({
+    type:"wall", angle:rad,
+    x: baseCenter.x+Math.cos(rad)*WALL_RADIUS, y: baseCenter.y+Math.sin(rad)*WALL_RADIUS,
+    rot: rad+Math.PI/2, hx:72, hy:9,
+    built:false, hp:0, maxHp:0, sign:null,
+  });
+}
+for(const deg of SOLDIER_ANGLES){
+  const rad = deg*Math.PI/180;
+  plots.push({
+    type:"soldier", angle:rad,
+    x: baseCenter.x+Math.cos(rad)*SOLDIER_RADIUS, y: baseCenter.y+Math.sin(rad)*SOLDIER_RADIUS,
+    built:false, level:0, atkCooldown:0, sign:null,
+  });
+}
+
+function closestPointOnWall(w, px, py){
+  const cosA = Math.cos(-w.rot), sinA = Math.sin(-w.rot);
+  const dx = px-w.x, dy = py-w.y;
+  const lx = dx*cosA - dy*sinA;
+  const ly = dx*sinA + dy*cosA;
+  const cx = clamp(lx, -w.hx, w.hx);
+  const cy = clamp(ly, -w.hy, w.hy);
+  const cosB = Math.cos(w.rot), sinB = Math.sin(w.rot);
+  return { x: cx*cosB - cy*sinB + w.x, y: cx*sinB + cy*cosB + w.y };
+}
+
+const plotSignsEl = document.getElementById("plotSigns");
+function ensurePlotSign(p){
+  if(p.sign) return p.sign;
+  const el = document.createElement("div");
+  el.className = "plotSign";
+  el.onclick = ()=>onPlotTap(p);
+  plotSignsEl.appendChild(el);
+  p.sign = el;
+  return el;
+}
+function refreshPlotSign(p){
+  const el = ensurePlotSign(p);
+  if(p.type==="wall"){
+    if(p.built && p.hp>0){
+      el.classList.add("hidden");
+    } else {
+      el.classList.remove("hidden"); el.classList.remove("upgrade");
+      el.innerHTML = `🧱 Wall<span class="cost">🪙${WALL_COST}</span>`;
+    }
+  } else {
+    if(!p.built){
+      el.classList.remove("hidden"); el.classList.remove("upgrade");
+      el.innerHTML = `🪖 Soldier<span class="cost">🪙${SOLDIER_BASE_COST}</span>`;
+    } else if(p.level < SOLDIER_MAX_LEVEL){
+      const cost = soldierUpgradeCost(p.level+1);
+      el.classList.remove("hidden"); el.classList.add("upgrade");
+      el.innerHTML = `⬆️ Lv${p.level+1}<span class="cost">🪙${cost}</span>`;
+    } else {
+      el.classList.add("hidden");
+    }
+  }
+  updatePlotAffordability(p);
+}
+function updatePlotAffordability(p){
+  if(!p.sign || p.sign.classList.contains("hidden")) return;
+  const cost = p.type==="wall" ? WALL_COST : (p.built ? soldierUpgradeCost(p.level+1) : SOLDIER_BASE_COST);
+  p.sign.classList.toggle("unaffordable", runGold<cost);
+}
+function updatePlotSignPos(p){
+  if(!p.sign || p.sign.classList.contains("hidden")) return;
+  const sx = worldToScreenX(p.x), sy = worldToScreenY(p.y) - (p.type==="wall"?26:36);
+  p.sign.style.left = sx+"px"; p.sign.style.top = sy+"px";
+}
+function updatePlotSigns(){
+  for(const p of plots){ updatePlotSignPos(p); updatePlotAffordability(p); }
+}
+function resetPlots(){
+  for(const p of plots){
+    if(p.type==="wall"){ p.built=false; p.hp=0; p.maxHp=0; }
+    else { p.built=false; p.level=0; p.atkCooldown=0; }
+    refreshPlotSign(p);
+  }
+}
+function onPlotTap(p){
+  if(state!=="playing") return;
+  ensureAudio();
+  if(p.type==="wall"){
+    if(!p.built && runGold>=WALL_COST){
+      runGold -= WALL_COST;
+      p.built = true;
+      p.maxHp = Math.round(WALL_BASE_HP*garrisonBonus().wallHpMult);
+      p.hp = p.maxHp;
+      spawnParticles(p.x,p.y,"#8a6a3a",14,120,0.4,3);
+      sfx.build();
+    }
+  } else if(!p.built){
+    if(runGold>=SOLDIER_BASE_COST){
+      runGold -= SOLDIER_BASE_COST;
+      p.built = true; p.level = 1; p.atkCooldown = 0;
+      spawnParticles(p.x,p.y,"#5ec8ff",14,120,0.4,3);
+      sfx.build();
+    }
+  } else if(p.level < SOLDIER_MAX_LEVEL){
+    const cost = soldierUpgradeCost(p.level+1);
+    if(runGold>=cost){
+      runGold -= cost; p.level++;
+      spawnParticles(p.x,p.y,"#5ec8ff",10,100,0.35,3);
+      sfx.build();
+    }
+  }
+  refreshPlotSign(p);
 }
 
 /* ============================== LEVEL UP CARDS ============================== */
@@ -727,6 +893,7 @@ function onDeath(){
   document.getElementById("goTier").textContent = tierForWave(wave).icon+" "+tierForWave(wave).name;
   document.getElementById("goGold").textContent = runGold;
   document.getElementById("hud").classList.add("hidden");
+  document.getElementById("plotSigns").classList.add("hidden");
   showBossBar(false);
   setTimeout(()=>document.getElementById("gameover").classList.remove("hidden"), 500);
 }
@@ -741,6 +908,7 @@ function onVictory(){
   document.getElementById("vGold").textContent = runGold;
   document.getElementById("vAsc").textContent = save.ascension;
   document.getElementById("hud").classList.add("hidden");
+  document.getElementById("plotSigns").classList.add("hidden");
   showBossBar(false);
   launchConfetti();
   setTimeout(()=>document.getElementById("victory").classList.remove("hidden"), 800);
@@ -808,6 +976,7 @@ function hideAllScreens(){
 function goMenu(){
   state="menu";
   document.getElementById("hud").classList.add("hidden");
+  document.getElementById("plotSigns").classList.add("hidden");
   showBossBar(false);
   hideAllScreens();
   document.getElementById("menu").classList.remove("hidden");
@@ -843,6 +1012,33 @@ function buildShop(){
   });
   document.getElementById("shopGold").textContent = save.bankedGold;
   buildKeepShopUI();
+  buildGarrisonShopUI();
+}
+
+function buildGarrisonShopUI(){
+  const grid = document.getElementById("garrisonGrid");
+  grid.innerHTML = "";
+  Object.keys(GARRISON).forEach(key=>{
+    const g = GARRISON[key];
+    const lvl = save.garrison[key];
+    const div = document.createElement("div");
+    div.className = "shopItem";
+    const maxed = lvl>=g.max;
+    const cost = g.cost(lvl);
+    div.innerHTML = `<h4>${g.icon} ${g.name}</h4>
+      <div class="lvl">Lv ${lvl}/${g.max} · ${g.desc}</div>
+      <button class="btn" ${maxed?"disabled":""}>${maxed?"MAX":`Upgrade — 🪙${cost}`}</button>`;
+    div.querySelector("button").onclick = ()=>{
+      if(maxed) return;
+      if(save.bankedGold>=cost){
+        save.bankedGold -= cost; save.garrison[key]++;
+        persist(); buildShop();
+        document.getElementById("shopGold").textContent = save.bankedGold;
+        sfx.coin();
+      }
+    };
+    grid.appendChild(div);
+  });
 }
 
 function buildKeepShopUI(){
@@ -980,8 +1176,53 @@ function update(dt){
         sfx.shoot();
       }
     }
+
+    // walls physically block enemies; a blocked enemy chips away at the wall like it would the player
+    for(const w of plots){
+      if(w.type!=="wall" || !w.built || w.hp<=0) continue;
+      const cp = closestPointOnWall(w, e.x, e.y);
+      const wdx = e.x-cp.x, wdy = e.y-cp.y;
+      const wd = Math.hypot(wdx,wdy);
+      const pad = e.radius+6;
+      if(wd < pad){
+        const nx = wd>0.01 ? wdx/wd : 1, ny = wd>0.01 ? wdy/wd : 0;
+        e.x = cp.x + nx*pad; e.y = cp.y + ny*pad;
+        e.wallAtkTimer = (e.wallAtkTimer||0) - dt;
+        if(e.wallAtkTimer<=0){
+          e.wallAtkTimer = 0.8;
+          w.hp -= e.dmg;
+          spawnParticles(cp.x,cp.y,"#c9a06a",6,90,0.3,2);
+          if(w.hp<=0){
+            w.built=false; w.hp=0;
+            spawnParticles(w.x,w.y,"#8a6a3a",18,150,0.5,3);
+            addShake(4);
+            refreshPlotSign(w);
+          }
+        }
+      }
+    }
   }
   enemies = enemies.filter(e=>!e.dead);
+
+  // soldier post auto-attack (static turrets built around the Keep)
+  for(const p of plots){
+    if(p.type!=="soldier" || !p.built) continue;
+    p.atkCooldown -= dt;
+    if(p.atkCooldown<=0){
+      const st = soldierStats(p.level);
+      const target = nearestEnemy(p.x,p.y,st.range);
+      if(target){
+        p.atkCooldown = 1/st.fireRate;
+        const ang = Math.atan2(target.y-p.y, target.x-p.x);
+        projectiles.push({
+          x:p.x, y:p.y,
+          vx:Math.cos(ang)*480, vy:Math.sin(ang)*480,
+          dmg: st.dmg, pierce:0, hitSet:new Set(), radius:5, life:1.2
+        });
+        sfx.shoot();
+      }
+    }
+  }
 
   // player auto attack
   player.atkCooldown -= dt;
@@ -1078,6 +1319,7 @@ function update(dt){
     if(intermission<=0) nextWave();
   }
 
+  updatePlotSigns();
   updateHud();
 }
 
@@ -1241,10 +1483,49 @@ function drawKeep(x,y,level){
   ctx.restore();
 }
 
+function drawWall(p){
+  const x=worldToScreenX(p.x), y=worldToScreenY(p.y);
+  ctx.save(); ctx.translate(x,y); ctx.rotate(p.rot);
+  ctx.fillStyle="#00000030"; ctx.fillRect(-p.hx,-p.hy+4,p.hx*2,p.hy*2);
+  ctx.fillStyle="#8a6a3a"; ctx.fillRect(-p.hx,-p.hy,p.hx*2,p.hy*2);
+  ctx.strokeStyle="#4a3a1e"; ctx.lineWidth=2; ctx.strokeRect(-p.hx,-p.hy,p.hx*2,p.hy*2);
+  ctx.restore();
+  const f = clamp(p.hp/p.maxHp,0,1);
+  if(f<1){
+    ctx.save(); ctx.translate(x,y-p.hy-10);
+    ctx.fillStyle="#0008"; ctx.fillRect(-p.hx,-4,p.hx*2,6);
+    ctx.fillStyle="#e0b050"; ctx.fillRect(-p.hx,-4,p.hx*2*f,6);
+    ctx.restore();
+  }
+}
+function drawSoldier(p){
+  const x=worldToScreenX(p.x), y=worldToScreenY(p.y);
+  ctx.save(); ctx.translate(x,y);
+  ctx.fillStyle="#00000055";
+  ctx.beginPath(); ctx.ellipse(0,10,12,5,0,0,7); ctx.fill();
+  ctx.fillStyle="#2f6fae";
+  ctx.beginPath(); ctx.moveTo(-7,-2); ctx.lineTo(-9,12); ctx.lineTo(9,12); ctx.lineTo(7,-2); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle="#12233a"; ctx.lineWidth=2;
+  ctx.fillStyle="#f0c27b";
+  ctx.beginPath(); ctx.arc(0,-8,7,0,7); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle="#5b3a1e"; ctx.lineWidth=3; ctx.lineCap="round";
+  ctx.beginPath(); ctx.moveTo(6,-4); ctx.lineTo(16,-14); ctx.stroke();
+  ctx.restore();
+  ctx.save();
+  ctx.font="bold 11px Arial"; ctx.textAlign="center"; ctx.fillStyle="#8fe3ff";
+  ctx.shadowColor="#000"; ctx.shadowBlur=3;
+  ctx.fillText("Lv"+p.level, x, y-24);
+  ctx.restore();
+}
+
 function drawWorldEntities(){
   const drawList = [];
   for(const c of coins) drawList.push({y:c.y, draw:()=>drawCoin(c)});
   for(const o of xporbs) drawList.push({y:o.y, draw:()=>drawOrb(o)});
+  for(const p of plots){
+    if(p.type==="wall" && p.built && p.hp>0) drawList.push({y:p.y, draw:()=>drawWall(p)});
+    if(p.type==="soldier" && p.built) drawList.push({y:p.y, draw:()=>drawSoldier(p)});
+  }
   for(const e of enemies) drawList.push({y:e.y, draw:()=>drawEnemy(e)});
   drawList.push({y:player.y, draw:()=>drawPlayer()});
   drawList.sort((a,b)=>a.y-b.y);
