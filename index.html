@@ -14,7 +14,7 @@
   #game{position:fixed; inset:0;}
   canvas{display:block; width:100%; height:100%; touch-action:none;}
 
-  .center{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; text-align:center; gap:14px; padding:20px; overflow-y:auto;}
+  .center{position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center; flex-direction:column; text-align:center; gap:14px; padding:20px; overflow-y:auto;}
   .hidden{display:none !important;}
 
   .panel{background:var(--panel); border:3px solid var(--panel-b); border-radius:16px; padding:22px 28px; box-shadow:0 10px 40px #000a, inset 0 0 30px #ffb52c22; backdrop-filter:blur(2px);}
@@ -184,10 +184,12 @@
     <p class="stat" style="text-align:left; line-height:1.6;">
       🕹️ <b>Move:</b> drag / swipe anywhere (or WASD / arrow keys).<br>
       🏹 Your hero auto-fires at the nearest enemy — just stay alive and keep moving!<br>
-      💰 <b>Kill enemies for coins</b> (and XP) — this is a tycoon at heart: fight to earn, then spend to grow.<br>
-      🧱 Around your Keep you'll see floating <b>build signs</b> in two rings — tap one to build a <b>Wall</b> (🪙50, permanent and indestructible, physically blocks enemies) or a <b>Tower</b>: 🪖 Soldier Post (balanced), 💣 Cannon Tower (heavy splash damage), or 🔮 Mage Spire (pierces multiple enemies). Towers can't be destroyed either — tap a built tower's sign again to upgrade it, endlessly, each level noticeably stronger than the last. Defenses are rebuilt fresh each run.<br>
+      💰 <b>Kill enemies for coins</b> (and XP) — watch the coin stack grow on your back as you carry your treasury around with you.<br>
+      🧱 Around your Keep you'll see dashed <b>foundation holes</b> with floating build signs — walk close and tap one to pour your coins in: a <b>Wall</b> (🪙50, permanent and indestructible, physically blocks enemies) or a <b>Tower</b>: 🪖 Soldier Post (balanced), 💣 Cannon Tower (splash damage), 🔮 Mage Spire (pierces multiple enemies), or ❄️ Frost Spire (slows enemies). Nothing you build can ever be destroyed — tap a built tower's sign again to upgrade it, endlessly, each level noticeably stronger. Defenses are rebuilt fresh each run.<br>
+      👹 Watch out for 🟡 Swarmers (fast, weak, attack in packs) and 🟠 Bombers (rush in and explode) alongside the usual Grunts, Archers and Tanks.<br>
+      🔥 Chain kills quickly for a growing Kill Combo.<br>
       ⭐ Level up mid-run to pick powerful upgrades.<br>
-      👹 A BOSS appears every 10 waves, each one exponentially tougher than the last — and every wave in between gets harder too. Survive 70 waves to reach <b>GOD LEVEL</b>.<br>
+      💀 A BOSS appears every 10 waves, each one exponentially tougher than the last — and every wave in between gets harder too. Survive 70 waves to reach <b>GOD LEVEL</b>.<br>
       🏰 Gold earned is banked to the Kingdom Treasury. Spend it in the Shop on Hero upgrades and your <b>Garrison</b> (permanent tower damage &amp; fire-rate bonuses) — these have <b>no level cap</b> and <b>double in strength every single purchase</b>, forever. Also spend it on your <b>Keep</b>, which grows through four material tiers, <b>Wood → Steel → Titanium → Futuristic</b>, each stronger tier also passively generating a trickle of coins on its own while you fight, tycoon-style.<br>
       🛡 A fully-built Futuristic Keep also grants an Energy Shield that blocks hits and slowly recharges.<br>
       🔁 After reaching God Level you can <b>Ascend</b> for a harder, more rewarding new journey.
@@ -487,6 +489,8 @@ let wave, waveTimer, spawnQueue, waveActive, intermission, runGold, activeBoss;
 let elapsed = 0;
 let pendingLevelUps = 0;
 let seenTier = null;
+let combo = 0, comboTimer = 0;
+let firstBuildDone = false;
 let keepSpin = 0;
 
 function ascensionMult(){ return 1 + save.ascension*0.35; }
@@ -542,6 +546,8 @@ function startRun(){
   player.hp = player.maxHp;
   enemies = []; projectiles = []; enemyProjectiles = []; coins = []; xporbs = []; particles = [];
   wave = 0; runGold = 0; activeBoss = null; seenTier = null;
+  combo = 0; comboTimer = 0; firstBuildDone = false;
+  buildAnims.length = 0;
   buildWorld();
   resetPlots();
   state = "playing";
@@ -568,8 +574,17 @@ function nextWave(){
     const count = 5 + Math.floor(wave*1.3);
     for(let i=0;i<count;i++){
       const r = Math.random();
-      const type = r<0.55 ? "grunt" : (r<0.85 ? "archer" : "tank");
-      spawnQueue.push({type, delay: i*0.35, scale, am});
+      let type;
+      if(wave>=4 && r<0.12) type = "bomber";
+      else if(wave>=3 && r<0.30) type = "swarmer";
+      else if(r<0.55) type = "grunt";
+      else if(r<0.82) type = "archer";
+      else type = "tank";
+      if(type==="swarmer"){
+        for(let k=0;k<3;k++) spawnQueue.push({type, delay:i*0.35+k*0.08, scale, am});
+      } else {
+        spawnQueue.push({type, delay: i*0.35, scale, am});
+      }
     }
   }
 
@@ -581,10 +596,12 @@ function nextWave(){
 }
 
 const ENEMY_BASE = {
-  grunt: {hp:22, dmg:9, spd:95, radius:15, color:"#d6432f", xp:3, gold:2, melee:true},
-  archer:{hp:15, dmg:7, spd:80, radius:13, color:"#9b3fc0", xp:4, gold:3, ranged:true, range:260, shotCd:1.6},
-  tank:  {hp:70, dmg:15, spd:55, radius:22, color:"#d6702b", xp:7, gold:5, melee:true},
-  boss:  {hp:900, dmg:22, spd:62, radius:42, color:"#8a0e0e", xp:60, gold:80, melee:true, ranged:true, range:300, shotCd:1.1},
+  grunt:   {hp:22, dmg:9, spd:95, radius:15, color:"#d6432f", xp:3, gold:2, melee:true},
+  archer:  {hp:15, dmg:7, spd:80, radius:13, color:"#9b3fc0", xp:4, gold:3, ranged:true, range:260, shotCd:1.6},
+  tank:    {hp:70, dmg:15, spd:55, radius:22, color:"#d6702b", xp:7, gold:5, melee:true},
+  swarmer: {hp:7, dmg:4, spd:150, radius:9, color:"#ffe14d", xp:1, gold:1, melee:true},
+  bomber:  {hp:14, dmg:26, spd:135, radius:12, color:"#ff8a3d", xp:5, gold:3, melee:false, ranged:false, special:"bomber"},
+  boss:    {hp:900, dmg:22, spd:62, radius:42, color:"#8a0e0e", xp:60, gold:80, melee:true, ranged:true, range:300, shotCd:1.1},
 };
 
 function spawnEnemy(kind, scale, am){
@@ -607,8 +624,14 @@ function spawnEnemy(kind, scale, am){
     shotCd: base.shotCd||1.5, shotTimer: rand(0,1),
     atkTimer: 0, hitFlash:0, isBoss: kind==="boss",
     wobble: rand(0,6.28),
+    special: base.special||null, fuseTimer: null,
+    slowTimer: 0, slowFactor: 0,
   };
-  if(e.isBoss){ activeBoss = e; showBossBar(true, "GOD KING" + (save.ascension>0?` (Asc ${save.ascension})`:"")); }
+  if(e.isBoss){
+    activeBoss = e; showBossBar(true, "GOD KING" + (save.ascension>0?` (Asc ${save.ascension})`:""));
+    addShake(14); screenFlash("#ff3333",300);
+    floatText(W/2, H*0.22, "⚠️ A GOD KING APPROACHES ⚠️", "#ff5252", 22);
+  }
   enemies.push(e);
 }
 
@@ -619,9 +642,10 @@ function spawnEnemy(kind, scale, am){
    (infinite, doubling) carry across runs. */
 const WALL_COST = 50;
 const TOWER_TYPES = {
-  soldier: { name:"Soldier Post", icon:"🪖", color:"#2f6fae", accent:"#12233a", cost:120, baseDmg:10, baseRange:210, baseFireRate:1.0, projSpeed:480, pierce:0, splash:0 },
-  cannon:  { name:"Cannon Tower", icon:"💣", color:"#8a3f2a", accent:"#3a1a10", cost:220, baseDmg:30, baseRange:225, baseFireRate:0.55, projSpeed:380, pierce:0, splash:50 },
-  mage:    { name:"Mage Spire",   icon:"🔮", color:"#7a3fae", accent:"#2a1440", cost:300, baseDmg:13, baseRange:255, baseFireRate:0.8, projSpeed:460, pierce:2, splash:0 },
+  soldier: { name:"Soldier Post", icon:"🪖", color:"#2f6fae", accent:"#12233a", cost:120, baseDmg:10, baseRange:210, baseFireRate:1.0, projSpeed:480, pierce:0, splash:0, slow:0 },
+  cannon:  { name:"Cannon Tower", icon:"💣", color:"#8a3f2a", accent:"#3a1a10", cost:220, baseDmg:30, baseRange:225, baseFireRate:0.55, projSpeed:380, pierce:0, splash:50, slow:0 },
+  mage:    { name:"Mage Spire",   icon:"🔮", color:"#7a3fae", accent:"#2a1440", cost:300, baseDmg:13, baseRange:255, baseFireRate:0.8, projSpeed:460, pierce:2, splash:0, slow:0 },
+  frost:   { name:"Frost Spire",  icon:"❄️", color:"#bfe9ff", accent:"#3a90c9", cost:260, baseDmg:6, baseRange:200, baseFireRate:0.9, projSpeed:420, pierce:0, splash:0, slow:0.45 },
 };
 function towerUpgradeCost(kind, nextLevel){ return Math.round(TOWER_TYPES[kind].cost*0.32*Math.pow(1.45, nextLevel-1)); }
 function turretStats(p){
@@ -632,15 +656,17 @@ function turretStats(p){
     dmg: t.baseDmg * growth * gb.dmgMult,
     range: Math.min(440, t.baseRange + p.level*11),
     fireRate: Math.min(4.5, t.baseFireRate * (1+(p.level-1)*0.08) * gb.fireRateMult),
-    projSpeed: t.projSpeed, pierce: t.pierce, splash: t.splash,
+    projSpeed: t.projSpeed, pierce: t.pierce, splash: t.splash, slow: t.slow,
   };
 }
 
 const baseCenter = { x: WORLD.w/2, y: WORLD.h/2 };
 const WALL_ANGLES = [18,54,90,126,162,198,234,270,306,342]; // 10 walls; two 36°-wide gaps at 0° and 180° are the entrances
 const TOWER_SETUP = [
-  {deg:0,   kind:"soldier"}, {deg:60,  kind:"cannon"}, {deg:120, kind:"mage"},
-  {deg:180, kind:"soldier"}, {deg:240, kind:"cannon"}, {deg:300, kind:"mage"},
+  {deg:0,   kind:"soldier"}, {deg:45,  kind:"frost"},
+  {deg:90,  kind:"cannon"},  {deg:135, kind:"mage"},
+  {deg:180, kind:"soldier"}, {deg:225, kind:"frost"},
+  {deg:270, kind:"cannon"},  {deg:315, kind:"mage"},
 ];
 const WALL_RADIUS = 200, TOWER_RADIUS = 150;
 const plots = [];
@@ -661,6 +687,9 @@ for(const t of TOWER_SETUP){
     built:false, level:0, atkCooldown:0, sign:null,
   });
 }
+
+const BUILD_RANGE = 190; // must be near a plot (your Keep's site) to deposit coins into it
+const buildAnims = [];
 
 function closestPointOnWall(w, px, py){
   const cosA = Math.cos(-w.rot), sinA = Math.sin(-w.rot);
@@ -685,6 +714,7 @@ function ensurePlotSign(p){
 }
 function refreshPlotSign(p){
   const el = ensurePlotSign(p);
+  if(p.animating){ el.classList.add("hidden"); return; }
   if(p.type==="wall"){
     if(p.built){
       el.classList.add("hidden");
@@ -720,39 +750,57 @@ function updatePlotSigns(){
 }
 function resetPlots(){
   for(const p of plots){
+    p.animating = false;
     if(p.type==="wall") p.built=false;
     else { p.built=false; p.level=0; p.atkCooldown=0; }
     refreshPlotSign(p);
   }
 }
 function onPlotTap(p){
-  if(state!=="playing") return;
+  if(state!=="playing" || p.animating) return;
   ensureAudio();
-  if(p.type==="wall"){
-    if(!p.built && runGold>=WALL_COST){
-      runGold -= WALL_COST;
-      p.built = true;
-      spawnParticles(p.x,p.y,"#8a6a3a",14,120,0.4,3);
-      sfx.build();
-    }
-  } else {
-    const t = TOWER_TYPES[p.kind];
-    if(!p.built){
-      if(runGold>=t.cost){
-        runGold -= t.cost; p.built = true; p.level = 1; p.atkCooldown = 0;
-        spawnParticles(p.x,p.y,t.color,14,120,0.4,3);
-        sfx.build();
-      }
-    } else {
-      const cost = towerUpgradeCost(p.kind, p.level+1);
-      if(runGold>=cost){
-        runGold -= cost; p.level++;
-        spawnParticles(p.x,p.y,t.color,10,100,0.35,3);
-        sfx.build();
-      }
-    }
+  const isWall = p.type==="wall";
+  const t = isWall ? null : TOWER_TYPES[p.kind];
+  const cost = isWall ? WALL_COST : (p.built ? towerUpgradeCost(p.kind, p.level+1) : t.cost);
+  if(runGold < cost) return;
+  if(dist2(player.x,player.y,p.x,p.y) > BUILD_RANGE*BUILD_RANGE){
+    floatText(worldToScreenX(p.x), worldToScreenY(p.y)-20, "Walk closer to build!", "#ffe9b0", 13);
+    return;
+  }
+  runGold -= cost;
+  p.animating = true;
+  refreshPlotSign(p);
+  const color = isWall ? "#8a6a3a" : t.color;
+  buildAnims.push({
+    plot: p, start: elapsed, duration: 0.6,
+    fromX: player.x, fromY: player.y, toX: p.x, toY: p.y, color,
+    wasBuilt: p.built,
+  });
+  sfx.coin();
+}
+function finalizeBuildAnim(anim){
+  const p = anim.plot;
+  p.animating = false;
+  if(p.type==="wall"){ p.built = true; }
+  else if(!anim.wasBuilt){ p.built = true; p.level = 1; p.atkCooldown = 0; }
+  else { p.level++; }
+  spawnParticles(p.x,p.y, anim.color, p.type==="wall"?16:12, 140, 0.45, 3);
+  addShake(5);
+  sfx.build();
+  if(!firstBuildDone){
+    firstBuildDone = true;
+    floatText(W/2, H*0.3, "🏗️ Foundation laid — your base begins!", "#ffd54a", 18);
   }
   refreshPlotSign(p);
+}
+function updateBuildAnims(dt){
+  for(let i=buildAnims.length-1;i>=0;i--){
+    const a = buildAnims[i];
+    if(elapsed - a.start >= a.duration){
+      finalizeBuildAnim(a);
+      buildAnims.splice(i,1);
+    }
+  }
 }
 
 /* ============================== LEVEL UP CARDS ============================== */
@@ -770,11 +818,13 @@ const UPGRADES = [
 ];
 
 function grantLevelUp(){
+  if(state==="gameover" || state==="victory") return; // don't clobber an end-of-run screen shown earlier this same frame
   pendingLevelUps++;
   if(pendingLevelUps===1) openLevelUpUI();
 }
 function openLevelUpUI(){
   state = "paused-levelup";
+  document.getElementById("plotSigns").classList.add("hidden");
   const choices = [];
   const pool = UPGRADES.slice();
   for(let i=0;i<3 && pool.length;i++){
@@ -788,12 +838,13 @@ function openLevelUpUI(){
     div.className="card";
     div.innerHTML = `<div class="icon">${c.icon}</div><h3>${c.name}</h3><p>${c.desc}</p>`;
     div.onclick = ()=>{
+      if(state!=="paused-levelup"){ document.getElementById("levelup").classList.add("hidden"); return; }
       c.apply(player);
       floatText(W/2, H*0.4, c.name+"!", "#ffd54a", 20);
       pendingLevelUps--;
       document.getElementById("levelup").classList.add("hidden");
       if(pendingLevelUps>0) openLevelUpUI();
-      else { state="playing"; }
+      else { state="playing"; document.getElementById("plotSigns").classList.remove("hidden"); }
     };
     wrap.appendChild(div);
   });
@@ -876,8 +927,10 @@ function nearestEnemy(x,y,maxRange){
   return best;
 }
 
+const COMBO_MILESTONES = [5,10,15,20,30,40,50,75,100];
 function damageEnemy(e, dmg, isCrit){
   e.hp -= dmg; e.hitFlash = 0.12;
+  if(isCrit) addShake(3);
   spawnParticles(e.x,e.y, isCrit?"#ffd54a":"#ffffff", isCrit?10:5, 140, 0.35, isCrit?3.5:2.5);
   floatText(worldToScreenX(e.x), worldToScreenY(e.y)-e.radius, (isCrit?"CRIT ":"")+Math.round(dmg), isCrit?"#ffd54a":"#ffffff", isCrit?18:14);
   if(e.hp<=0) killEnemy(e);
@@ -887,6 +940,20 @@ function killEnemy(e){
   e.dead = true;
   spawnParticles(e.x,e.y,e.color,e.isBoss?60:16, e.isBoss?260:150, e.isBoss?0.9:0.5, e.isBoss?5:3);
   if(e.isBoss){ addShake(18); screenFlash("#ff3333",400); sfx.death(); showBossBar(false); activeBoss=null; }
+  if(e.kind==="bomber"){
+    const blastR = 70;
+    if(dist2(e.x,e.y,player.x,player.y) < blastR*blastR) damagePlayer(e.dmg);
+    spawnParticles(e.x,e.y,"#ff8a3d",26,220,0.55,4);
+    addShake(9); screenFlash("#ff8a3d",220);
+  }
+  if(!e.isBoss){
+    combo++; comboTimer = 1.4;
+    if(COMBO_MILESTONES.includes(combo)){
+      sfx.levelup();
+      floatText(W/2, H*0.24, `🔥 ${combo} KILL COMBO!`, "#ff9d3d", 18+Math.min(14,combo/4));
+      addShake(4);
+    }
+  }
   coins.push({x:e.x,y:e.y,val:e.goldVal, vx:rand(-40,40), vy:rand(-40,40)});
   xporbs.push({x:e.x+rand(-8,8), y:e.y+rand(-8,8), val:e.xpVal, vx:rand(-40,40), vy:rand(-40,40)});
 }
@@ -917,6 +984,8 @@ function onDeath(){
   document.getElementById("goGold").textContent = runGold;
   document.getElementById("hud").classList.add("hidden");
   document.getElementById("plotSigns").classList.add("hidden");
+  document.getElementById("levelup").classList.add("hidden");
+  pendingLevelUps = 0;
   showBossBar(false);
   setTimeout(()=>document.getElementById("gameover").classList.remove("hidden"), 500);
 }
@@ -932,6 +1001,8 @@ function onVictory(){
   document.getElementById("vAsc").textContent = save.ascension;
   document.getElementById("hud").classList.add("hidden");
   document.getElementById("plotSigns").classList.add("hidden");
+  document.getElementById("levelup").classList.add("hidden");
+  pendingLevelUps = 0;
   showBossBar(false);
   launchConfetti();
   setTimeout(()=>document.getElementById("victory").classList.remove("hidden"), 800);
@@ -1170,15 +1241,17 @@ function update(dt){
   for(const e of enemies){
     if(e.dead) continue;
     e.wobble += dt*4;
+    if(e.slowTimer>0) e.slowTimer -= dt;
+    const effSpeed = e.speed * (e.slowTimer>0 ? (1-e.slowFactor) : 1);
     const dx2 = player.x-e.x, dy2 = player.y-e.y;
     const d = Math.hypot(dx2,dy2)||1;
     const desiredRange = e.ranged ? e.range*0.8 : 0;
     if(d>desiredRange+4){
       const nx=dx2/d, ny=dy2/d;
-      e.x += nx*e.speed*dt; e.y += ny*e.speed*dt;
+      e.x += nx*effSpeed*dt; e.y += ny*effSpeed*dt;
     } else if(e.ranged && d < desiredRange-30){
       const nx=dx2/d, ny=dy2/d;
-      e.x -= nx*e.speed*0.6*dt; e.y -= ny*e.speed*0.6*dt;
+      e.x -= nx*effSpeed*0.6*dt; e.y -= ny*effSpeed*0.6*dt;
     }
     if(e.hitFlash>0) e.hitFlash-=dt;
 
@@ -1194,6 +1267,10 @@ function update(dt){
         enemyProjectiles.push({x:e.x,y:e.y,vx:Math.cos(ang)*260,vy:Math.sin(ang)*260,dmg:e.dmg,radius:6,life:3});
         sfx.shoot();
       }
+    }
+    if(e.special==="bomber" && d < 50){
+      e.fuseTimer = (e.fuseTimer==null ? 1.0 : e.fuseTimer) - dt;
+      if(e.fuseTimer<=0){ killEnemy(e); continue; }
     }
 
     // walls physically block enemies — they're indestructible, so this is pure collision, no damage
@@ -1224,7 +1301,7 @@ function update(dt){
         projectiles.push({
           x:p.x, y:p.y,
           vx:Math.cos(ang)*st.projSpeed, vy:Math.sin(ang)*st.projSpeed,
-          dmg: st.dmg, pierce:st.pierce, splash:st.splash, hitSet:new Set(), radius:5, life:1.2
+          dmg: st.dmg, pierce:st.pierce, splash:st.splash, slow:st.slow, hitSet:new Set(), radius:5, life:1.2
         });
         sfx.shoot();
       }
@@ -1263,6 +1340,7 @@ function update(dt){
         const dmg = p.dmg*(isCrit?player.critMult:1);
         damageEnemy(e, dmg, isCrit);
         p.hitSet.add(e);
+        if(p.slow){ e.slowFactor = p.slow; e.slowTimer = 1.4; }
         if(p.splash){
           for(const e2 of enemies){
             if(e2.dead || e2===e || p.hitSet.has(e2)) continue;
@@ -1322,6 +1400,7 @@ function update(dt){
   particles = particles.filter(pt=>pt.life>0);
 
   if(shake>0) shake = Math.max(0, shake-dt*40);
+  if(comboTimer>0){ comboTimer -= dt; if(comboTimer<=0) combo = 0; }
 
   // wave completion check
   if(waveActive && spawnQueue.length===0 && enemies.length===0){
@@ -1335,6 +1414,7 @@ function update(dt){
     if(intermission<=0) nextWave();
   }
 
+  updateBuildAnims(dt);
   updatePlotSigns();
   updateHud();
 }
@@ -1529,11 +1609,17 @@ function drawTower(p){
     ctx.beginPath(); ctx.arc(0,-2,10,0,7); ctx.fill();
     ctx.strokeStyle=t.accent; ctx.lineWidth=5; ctx.lineCap="round";
     ctx.beginPath(); ctx.moveTo(0,-2); ctx.lineTo(15,-14); ctx.stroke();
-  } else {
+  } else if(p.kind==="mage"){
     ctx.fillStyle=t.color;
     ctx.beginPath(); ctx.moveTo(-9,10); ctx.lineTo(-6,-14); ctx.lineTo(6,-14); ctx.lineTo(9,10); ctx.closePath(); ctx.fill();
     ctx.fillStyle=t.accent; ctx.shadowColor=t.accent; ctx.shadowBlur=10;
     ctx.beginPath(); ctx.arc(0,-18,6,0,7); ctx.fill();
+    ctx.shadowBlur=0;
+  } else {
+    ctx.fillStyle=t.color;
+    ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(9,4); ctx.lineTo(5,12); ctx.lineTo(-5,12); ctx.lineTo(-9,4); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=t.accent; ctx.lineWidth=2; ctx.shadowColor=t.accent; ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(0,8); ctx.moveTo(-7,-2); ctx.lineTo(7,-2); ctx.stroke();
     ctx.shadowBlur=0;
   }
   ctx.restore();
@@ -1544,11 +1630,48 @@ function drawTower(p){
   ctx.restore();
 }
 
+function drawFoundationHole(p){
+  const x=worldToScreenX(p.x), y=worldToScreenY(p.y);
+  ctx.save(); ctx.translate(x,y);
+  ctx.strokeStyle="#00000055"; ctx.lineWidth=3; ctx.setLineDash([6,5]);
+  if(p.type==="wall"){ ctx.beginPath(); ctx.ellipse(0,4,p.hx*0.7,p.hy*2.4,0,0,7); ctx.stroke(); }
+  else { ctx.beginPath(); ctx.ellipse(0,6,16,8,0,0,7); ctx.stroke(); }
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+function drawBuildAnim(a){
+  const p = a.plot;
+  const progress = clamp((elapsed-a.start)/a.duration, 0, 1);
+  const hx = worldToScreenX(p.x), hy = worldToScreenY(p.y);
+  ctx.save(); ctx.translate(hx,hy);
+  ctx.strokeStyle="#00000055"; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.ellipse(0,5,20,9,0,0,7); ctx.stroke();
+  ctx.fillStyle=a.color; ctx.globalAlpha=0.85;
+  ctx.beginPath(); ctx.ellipse(0,5,20*progress,9*progress,0,0,7); ctx.fill();
+  ctx.globalAlpha=1;
+  ctx.restore();
+
+  const coinCount = 5;
+  for(let i=0;i<coinCount;i++){
+    const cProg = clamp(progress*1.3 - i*0.08, 0, 1);
+    if(cProg<=0 || cProg>=1) continue;
+    const fx = worldToScreenX(a.fromX), fy = worldToScreenY(a.fromY)-20;
+    const arc = Math.sin(cProg*Math.PI)*40;
+    const px = fx + (hx-fx)*cProg;
+    const py = fy + (hy-fy)*cProg - arc;
+    ctx.save(); ctx.translate(px,py);
+    ctx.fillStyle="#ffd54a"; ctx.strokeStyle="#c9860c"; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(0,0,5,0,7); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+}
+
 function drawWorldEntities(){
   const drawList = [];
   for(const c of coins) drawList.push({y:c.y, draw:()=>drawCoin(c)});
   for(const o of xporbs) drawList.push({y:o.y, draw:()=>drawOrb(o)});
   for(const p of plots){
+    if(!p.built && !p.animating) drawList.push({y:p.y-1, draw:()=>drawFoundationHole(p)});
     if(p.type==="wall" && p.built) drawList.push({y:p.y, draw:()=>drawWall(p)});
     if(p.type==="tower" && p.built) drawList.push({y:p.y, draw:()=>drawTower(p)});
   }
@@ -1560,6 +1683,7 @@ function drawWorldEntities(){
   for(const p of projectiles) drawProjectile(p, "#ffe58a");
   for(const p of enemyProjectiles) drawProjectile(p, "#ff6b6b");
   for(const pt of particles) drawParticle(pt);
+  for(const a of buildAnims) drawBuildAnim(a);
 }
 
 function drawCoin(c){
@@ -1601,8 +1725,10 @@ function drawEnemy(e){
 
   const bob = Math.sin(e.wobble)*2;
   ctx.translate(0,bob);
-  ctx.strokeStyle="#1a1206"; ctx.lineWidth=3;
-  ctx.fillStyle = e.hitFlash>0 ? "#ffffff" : e.color;
+  ctx.strokeStyle = e.slowTimer>0 ? "#bfe9ff" : "#1a1206"; ctx.lineWidth = e.slowTimer>0 ? 4 : 3;
+  let fillColor = e.hitFlash>0 ? "#ffffff" : e.color;
+  if(e.fuseTimer!=null && Math.floor(elapsed*10)%2===0) fillColor = "#ffffff";
+  ctx.fillStyle = fillColor;
   ctx.beginPath(); ctx.arc(0,0,e.radius,0,7); ctx.fill(); ctx.stroke();
 
   if(e.isBoss){
@@ -1634,6 +1760,19 @@ function drawPlayer(){
   ctx.beginPath(); ctx.ellipse(0,player.radius*0.85,player.radius*0.9,player.radius*0.35,0,0,7); ctx.fill();
 
   if(player.invuln>0 && Math.floor(elapsed*20)%2===0){ ctx.globalAlpha=0.5; }
+
+  // backpack: a visible stack of coins that grows as you carry more gold, so your treasury
+  // is something you can literally see on your hero, not just a number in the HUD
+  const backpackCoins = Math.min(14, Math.round(Math.log2(runGold+1)*1.7));
+  if(backpackCoins>0){
+    ctx.save(); ctx.translate(-2,10);
+    for(let i=0;i<backpackCoins;i++){
+      const wob = Math.sin(elapsed*3 + i*0.7)*1;
+      ctx.fillStyle="#ffd54a"; ctx.strokeStyle="#c9860c"; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.ellipse(wob,-i*3.4,7,3,0,0,7); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  }
 
   if(player.shield>0){
     ctx.strokeStyle="#39ffe0"; ctx.lineWidth=2.5; ctx.shadowColor="#39ffe0"; ctx.shadowBlur=10;
