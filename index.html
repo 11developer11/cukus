@@ -627,6 +627,7 @@ let keepSpin = 0;
 let activeEvent = null, eventTimer = 0;
 let chicken = null, chickenTimer = 0;
 let runKills = 0, runChickensCaught = 0, runBestCombo = 0, runMaxWalls = 0;
+let godModeActive = false;
 
 function ascensionMult(){ return 1 + save.ascension*0.35; }
 
@@ -964,6 +965,7 @@ const UPGRADES = [
 
 function grantLevelUp(){
   if(state==="gameover" || state==="victory") return; // don't clobber an end-of-run screen shown earlier this same frame
+  if(godModeActive) return; // god mode: no level-up interruptions, just chaos
   pendingLevelUps++;
   if(pendingLevelUps===1) openLevelUpUI();
 }
@@ -1428,8 +1430,9 @@ function buildKeepShopUI(){
   }
 }
 
-document.getElementById("playBtn").onclick = ()=>{ ensureAudio(); startRun(); };
+document.getElementById("playBtn").onclick = ()=>{ godModeActive = false; ensureAudio(); startRun(); };
 document.getElementById("godBtn").onclick = ()=>{
+  godModeActive = true;
   // Levels are capped well below 50000: shop bonuses double per level, and JS floats overflow
   // to Infinity around level ~1024 (2^1024). These caps already exceed every internal cap in the
   // game (crit 90%, speed 900, fire-rate 4.5x, etc.), so it plays identically to "everything maxed."
@@ -1446,12 +1449,13 @@ document.getElementById("howBtn").onclick = ()=>{ hideAllScreens(); document.get
 document.getElementById("howBack").onclick = goMenu;
 document.getElementById("achBtn").onclick = ()=>{ hideAllScreens(); buildAchievementsUI(); document.getElementById("achievements").classList.remove("hidden"); };
 document.getElementById("achBack").onclick = goMenu;
-document.getElementById("retryBtn").onclick = ()=>{ document.getElementById("gameover").classList.add("hidden"); startRun(); };
+document.getElementById("retryBtn").onclick = ()=>{ godModeActive = false; document.getElementById("gameover").classList.add("hidden"); startRun(); };
 document.getElementById("menuBtn").onclick = ()=>{ document.getElementById("gameover").classList.add("hidden"); goMenu(); };
 document.getElementById("vMenuBtn").onclick = ()=>{ document.getElementById("victory").classList.add("hidden"); goMenu(); };
 document.getElementById("ascendBtn").onclick = ()=>{
   save.ascension++; persist();
   document.getElementById("victory").classList.add("hidden");
+  godModeActive = false;
   startRun();
 };
 
