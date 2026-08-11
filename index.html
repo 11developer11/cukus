@@ -185,6 +185,9 @@
     <div class="row">
       <button class="btn big" id="playBtn">▶ Play Now</button>
     </div>
+    <div class="row" style="margin-top:8px;">
+      <button class="btn secondary" id="godBtn" style="background:linear-gradient(#fff7d6,#ffd54a 55%,#c9860c); border-color:#7a4a00;">👑 GOD MODE — Wave 55, Everything Maxed</button>
+    </div>
     <div class="row" style="margin-top:10px;">
       <button class="btn secondary" id="shopBtn">🛒 Kingdom Shop</button>
       <button class="btn secondary" id="achBtn">🏆 Achievements</button>
@@ -673,11 +676,11 @@ function newPlayer(){
   };
 }
 
-function startRun(){
+function startRun(startWave){
   player = newPlayer();
   player.hp = player.maxHp;
   enemies = []; projectiles = []; enemyProjectiles = []; coins = []; xporbs = []; particles = [];
-  wave = 0; runGold = 0; activeBoss = null; seenTier = null;
+  wave = (startWave||1) - 1; runGold = 0; activeBoss = null; seenTier = null;
   combo = 0; comboTimer = 0; firstBuildDone = false;
   buildAnims.length = 0;
   activeEvent = null; eventTimer = rand(22,35);
@@ -1426,6 +1429,17 @@ function buildKeepShopUI(){
 }
 
 document.getElementById("playBtn").onclick = ()=>{ ensureAudio(); startRun(); };
+document.getElementById("godBtn").onclick = ()=>{
+  // Levels are capped well below 50000: shop bonuses double per level, and JS floats overflow
+  // to Infinity around level ~1024 (2^1024). These caps already exceed every internal cap in the
+  // game (crit 90%, speed 900, fire-rate 4.5x, etc.), so it plays identically to "everything maxed."
+  save.meta = { dmg:30, hp:30, spd:20, luck:30, regen:25 };
+  save.garrison = { dmg:20, fireRate:20 };
+  save.keepLevel = KEEP_MAX_LEVEL;
+  persist();
+  ensureAudio();
+  startRun(55);
+};
 document.getElementById("shopBtn").onclick = ()=>{ hideAllScreens(); buildShop(); document.getElementById("shop").classList.remove("hidden"); };
 document.getElementById("shopBack").onclick = goMenu;
 document.getElementById("howBtn").onclick = ()=>{ hideAllScreens(); document.getElementById("how").classList.remove("hidden"); };
